@@ -145,7 +145,7 @@ public class VisualKeywordExpressionBuilderDialog extends JDialog {
     private void parseExpression() {
         String expression = manualExpressionArea.getText();
         if (expression != null && !expression.isBlank()) {
-            String[] tokens = expression.split("(?<=[()&|!])|(?=[()&|!])|\\s+");
+            String[] tokens = expression.split("(?<=[()&|!])|(?=[()&|!])");
             expressionTokens.clear();
             Arrays.stream(tokens)
                     .map(String::trim)

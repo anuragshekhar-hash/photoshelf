@@ -75,7 +75,7 @@ public class KeywordExpressionEvaluator {
         List<String> postfix = new ArrayList<>();
         Stack<String> operators = new Stack<>();
         // Regex to split by operators/parentheses, keeping them, and by whitespace.
-        String[] tokens = expression.split("(?<=[()&|!])|(?=[()&|!])|\\s+");
+        String[] tokens = expression.split("(?<=[()&|!])|(?=[()&|!])");
 
         for (String token : tokens) {
             token = token.trim();
