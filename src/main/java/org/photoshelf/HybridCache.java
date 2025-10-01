@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 /**
  * A generic, two-tier hybrid cache that combines a fast, size-limited in-memory
@@ -122,6 +124,29 @@ public class HybridCache<K, V extends Serializable> {
             }
         });
     }
+
+    public int cleanup() {
+        AtomicInteger removedCount = new AtomicInteger(0);
+        try (Stream<Path> files = Files.walk(diskCacheDir)) {
+            files.filter(Files::isRegularFile).forEach(path -> {
+                String key = path.getFileName().toString().replace(".cache", "").replaceAll("_", "/");
+                // This is a heuristic. A better way would be to store the original path in the cache file.
+                // For now, we assume the key is derived from the file path.
+                if (!Files.exists(Path.of(key.split("_[0-9]+x[0-9]+")[0]))) {
+                    try {
+                        Files.delete(path);
+                        removedCount.incrementAndGet();
+                    } catch (IOException e) {
+                        System.err.println("Failed to delete orphaned cache file: " + path);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("Error during cache cleanup: " + e.getMessage());
+        }
+        return removedCount.get();
+    }
+
 
     /**
      * Shuts down the background thread pool used for disk writes.

@@ -98,6 +98,28 @@ public class KeywordManager {
                 .collect(Collectors.toSet());
     }
 
+    public int cleanup() {
+        int removedCount = 0;
+        var iterator = keywordMap.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            String path = entry.getKey();
+            if (!Files.exists(Path.of(path))) {
+                iterator.remove();
+                removedCount++;
+            }
+        }
+
+        if (removedCount > 0) {
+            saveKeywords();
+        }
+        return removedCount;
+    }
+
+    public void shutdown() {
+        // No-op, added for symmetry with other managers that have background threads.
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Set<String>> loadKeywords() {
         if (Files.exists(storagePath)) {

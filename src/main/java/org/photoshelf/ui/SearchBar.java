@@ -5,10 +5,7 @@ import org.photoshelf.SearchParams;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
+import java.awt.event.*;
 import java.util.List;
 
 public class SearchBar extends JToolBar {
@@ -59,6 +56,7 @@ public class SearchBar extends JToolBar {
         searchQueryField.addActionListener(searchAction);
 
         keywordField = new KeywordEntryField(mainApp.getKeywordManager());
+        keywordField.setColumn(15);
         keywordField.setToolTipText("Enter comma-separated keywords and press Enter");
         keywordField.getTextField().addKeyListener(new KeyAdapter() {
             @Override
@@ -85,6 +83,20 @@ public class SearchBar extends JToolBar {
             if (newExpression != null) {
                 keywordExpression = newExpression;
                 expressionLabel.setText(" " + keywordExpression);
+            }
+        });
+
+        noKeywordsCheckBox.addItemListener(new ItemListener() {
+            @Override
+            public void itemStateChanged(ItemEvent e) {
+                if (e.getStateChange() == ItemEvent.SELECTED) {
+                    keywordField.setEnable(false);
+                    expressionBuilderButton.setEnabled(false);
+                }
+                else {
+                    keywordField.setEnable(true);
+                    expressionBuilderButton.setEnabled(true);
+                }
             }
         });
 

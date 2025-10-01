@@ -26,6 +26,14 @@ public class KeywordEntryField extends JPanel {
         KeywordAutoComplete autoComplete = new KeywordAutoComplete(textField, keywordSuggestion);
     }
 
+    public void setColumn(int col) {
+        textField.setColumns(col);
+    }
+
+    public void setEnable(boolean enable) {
+        textField.setEnabled(enable);
+    }
+
     public List<String> getKeywords() {
         String text = textField.getText();
         if (text.trim().isEmpty()) {
