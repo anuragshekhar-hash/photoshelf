@@ -5,12 +5,15 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Arrays;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ImageLoader extends SwingWorker<Integer, JLabel> {
     private final File directory;
@@ -36,29 +39,23 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
     }
 
     @Override
-    protected Integer doInBackground() {
-        File[] files = directory.listFiles((d, name) -> {
-            String lower = name.toLowerCase();
-            String extension = lower.substring(lower.lastIndexOf('.') + 1);
-            if (filterText.isEmpty()) {
-                return SUPPORTED_EXTENSIONS.contains(extension);
-            } else {
-                return filterText.equals(extension);
-            }
-        });
+    protected Integer doInBackground() throws Exception {
+        List<File> filesToDisplay;
+        try (Stream<Path> stream = Files.list(directory.toPath())) {
+            filesToDisplay = stream
+                    .filter(path -> {
+                        String lower = path.getFileName().toString().toLowerCase();
+                        String extension = lower.substring(lower.lastIndexOf('.') + 1);
+                        return SUPPORTED_EXTENSIONS.contains(extension) && (filterText.isEmpty() || filterText.equals(extension));
+                    })
+                    .map(Path::toFile)
+                    .collect(Collectors.toList());
+        }
 
-        if (files == null) return 0;
-
-        List<File> filteredFiles = new ArrayList<>(Arrays.asList(files));
-
-        DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
-        ui.setDuplicateFiles(duplicateFinder.findDuplicates(filteredFiles));
-
-        File[] filesToDisplay;
         if (showOnlyDuplicates) {
-            filesToDisplay = ui.getDuplicateFiles().toArray(new File[0]);
-        } else {
-            filesToDisplay = filteredFiles.toArray(new File[0]);
+            DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
+            ui.setDuplicateFiles(duplicateFinder.findDuplicates(filesToDisplay));
+            filesToDisplay = new ArrayList<>(ui.getDuplicateFiles());
         }
 
         Comparator<File> comparator = switch (sortCriteria) {
@@ -81,7 +78,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
         if (descending) {
             comparator = comparator.reversed();
         }
-        Arrays.sort(filesToDisplay, comparator);
+        filesToDisplay.sort(comparator);
 
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);

@@ -718,6 +718,10 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         return keywordManager;
     }
 
+    public ImagePanelManager getImagePanelManager() {
+        return imagePanelManager;
+    }
+
     public void updateTotalFile(int count) {
         statusPanelManager.updateTotalFiles(count);
     }
