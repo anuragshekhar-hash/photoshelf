@@ -258,6 +258,8 @@ public class PreviewPanelManager {
             dialog.dispose();
         });
 
+        keywordEntryField.addActionListener(e -> addButton.doClick());
+
         JButton cancelButton = new JButton("Cancel");
         cancelButton.addActionListener(e -> dialog.dispose());
 

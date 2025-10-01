@@ -6,6 +6,7 @@ import org.photoshelf.KeywordSuggestion;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,6 +25,10 @@ public class KeywordEntryField extends JPanel {
 
         KeywordSuggestion keywordSuggestion = new KeywordSuggestion(keywordManager);
         KeywordAutoComplete autoComplete = new KeywordAutoComplete(textField, keywordSuggestion);
+    }
+
+    public void addActionListener(ActionListener l) {
+        textField.addActionListener(l);
     }
 
     public void setColumn(int col) {

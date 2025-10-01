@@ -165,8 +165,8 @@ public class KeywordAutoComplete {
         int start = offset;
         while (start > 0) {
             char c = text.charAt(start - 1);
-            // Delimiters are operators and whitespace
-            if ("()&|! ".indexOf(c) != -1) {
+            // Delimiters are operators, whitespace, and commas
+            if ("()&|! ,".indexOf(c) != -1) {
                 break;
             }
             start--;

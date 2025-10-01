@@ -4,6 +4,8 @@ import org.photoshelf.ui.KeywordEntryField;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.List;
 import java.util.Set;
@@ -58,6 +60,8 @@ public class KeywordManagementDialog extends JDialog {
         JButton addButton = new JButton("Add to All");
         addPanel.add(keywordEntryField, BorderLayout.CENTER);
         addPanel.add(addButton, BorderLayout.EAST);
+
+        keywordEntryField.addActionListener(e -> addButton.doClick());
 
         addButton.addActionListener(e -> {
             List<String> newKeywords = keywordEntryField.getKeywords();
