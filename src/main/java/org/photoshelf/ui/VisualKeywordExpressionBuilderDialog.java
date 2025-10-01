@@ -1,14 +1,12 @@
 package org.photoshelf.ui;
 
-import org.photoshelf.KeywordAutoComplete;
 import org.photoshelf.KeywordManager;
-import org.photoshelf.KeywordSuggestion;
+import org.photoshelf.ParseException;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -17,7 +15,7 @@ public class VisualKeywordExpressionBuilderDialog extends JDialog {
     private final List<String> expressionTokens = new ArrayList<>();
     private final JPanel expressionCanvas;
     private String finalExpression;
-    JTextArea manualExpressionArea;
+    private final ExpressionTextBox manualExpressionArea;
     private boolean responce;
 
     public VisualKeywordExpressionBuilderDialog(Frame owner, KeywordManager keywordManager, String initialExpression) {
@@ -30,11 +28,7 @@ public class VisualKeywordExpressionBuilderDialog extends JDialog {
         // 1. Manual Entry with Suggestions
         JPanel manualEntryPanel = new JPanel(new BorderLayout(5, 5));
         manualEntryPanel.setBorder(BorderFactory.createTitledBorder("Manual Expression Entry"));
-        manualExpressionArea = new JTextArea(3, 30);
-        manualExpressionArea.setLineWrap(true);
-        manualExpressionArea.setWrapStyleWord(true);
-        KeywordSuggestion keywordSuggestion = new KeywordSuggestion(keywordManager);
-        new KeywordAutoComplete(manualExpressionArea, keywordSuggestion);
+        manualExpressionArea = new ExpressionTextBox(30, keywordManager);
 
         manualExpressionArea.addKeyListener(new KeyAdapter() {
             @Override
@@ -47,10 +41,8 @@ public class VisualKeywordExpressionBuilderDialog extends JDialog {
 
         JButton parseButton = new JButton("Parse");
         parseButton.setToolTipText("Parse the manual expression and populate the grid below");
-        parseButton.addActionListener(e -> {
-                parseExpression();
-            });
-        manualEntryPanel.add(new JScrollPane(manualExpressionArea), BorderLayout.CENTER);
+        parseButton.addActionListener(e -> parseExpression());
+        manualEntryPanel.add(manualExpressionArea, BorderLayout.CENTER);
         manualEntryPanel.add(parseButton, BorderLayout.EAST);
 
         // 2. GUI Control Panel (for adding tokens)
@@ -143,15 +135,15 @@ public class VisualKeywordExpressionBuilderDialog extends JDialog {
     }
 
     private void parseExpression() {
-        String expression = manualExpressionArea.getText();
-        if (expression != null && !expression.isBlank()) {
-            String[] tokens = expression.split("(?<=[()&|!])|(?=[()&|!])");
-            expressionTokens.clear();
-            Arrays.stream(tokens)
-                    .map(String::trim)
-                    .filter(token -> !token.isEmpty())
-                    .forEach(expressionTokens::add);
-            redrawExpressionCanvas();
+        try {
+            List<String> tokens = manualExpressionArea.getParsedTokens();
+            if (!tokens.isEmpty()) {
+                expressionTokens.clear();
+                expressionTokens.addAll(tokens);
+                redrawExpressionCanvas();
+            }
+        } catch (ParseException e) {
+            JOptionPane.showMessageDialog(this, e.getMessage(), "Parsing Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

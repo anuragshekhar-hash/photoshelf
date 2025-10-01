@@ -162,14 +162,14 @@ public class KeywordAutoComplete {
     }
 
     private int findWordStart(String text, int offset) {
-        if (offset == 0) {
-            return 0;
-        }
-        int commaIndex = text.lastIndexOf(',', offset - 1);
-        int start = commaIndex + 1;
-        // Skip leading whitespace after the comma
-        while (start < offset && Character.isWhitespace(text.charAt(start))) {
-            start++;
+        int start = offset;
+        while (start > 0) {
+            char c = text.charAt(start - 1);
+            // Delimiters are operators and whitespace
+            if ("()&|! ".indexOf(c) != -1) {
+                break;
+            }
+            start--;
         }
         return start;
     }

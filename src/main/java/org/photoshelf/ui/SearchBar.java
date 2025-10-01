@@ -1,5 +1,6 @@
 package org.photoshelf.ui;
 
+import org.photoshelf.ParseException;
 import org.photoshelf.PhotoShelfUI;
 import org.photoshelf.SearchParams;
 
@@ -10,7 +11,7 @@ import java.util.List;
 
 public class SearchBar extends JToolBar {
     private final JTextField searchQueryField;
-    private final KeywordEntryField keywordField;
+    private final ExpressionTextBox keywordField;
     private final JCheckBox searchAllDirsCheckBox;
     private final JCheckBox noKeywordsCheckBox;
     private final JCheckBox filterCurrentViewCheckBox;
@@ -28,9 +29,14 @@ public class SearchBar extends JToolBar {
             } else if (keywordExpression != null && !keywordExpression.isBlank()) {
                 searchParams.setExpression(keywordExpression);
             } else {
-                List<String> keywords = keywordField.getKeywords();
-                if (!keywords.isEmpty()) {
-                    searchParams.setKeywords(keywords);
+                try {
+                    List<String> keywords = keywordField.getParsedTokens();
+                    if (!keywords.isEmpty()) {
+                        searchParams.setExpression(keywordField.getText());
+                    }
+                }
+                catch (ParseException pe) {
+                    JOptionPane.showMessageDialog(mainApp, pe.getMessage(), "Parsing Error", JOptionPane.ERROR_MESSAGE);
                 }
             }
             String pattern = getSearchQuery();
@@ -55,10 +61,9 @@ public class SearchBar extends JToolBar {
         searchQueryField.setToolTipText("Enter a search pattern for file names and press Enter");
         searchQueryField.addActionListener(searchAction);
 
-        keywordField = new KeywordEntryField(mainApp.getKeywordManager());
-        keywordField.setColumn(15);
+        keywordField = new ExpressionTextBox(15, mainApp.getKeywordManager());
         keywordField.setToolTipText("Enter comma-separated keywords and press Enter");
-        keywordField.getTextField().addKeyListener(new KeyAdapter() {
+        keywordField.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
@@ -90,11 +95,11 @@ public class SearchBar extends JToolBar {
             @Override
             public void itemStateChanged(ItemEvent e) {
                 if (e.getStateChange() == ItemEvent.SELECTED) {
-                    keywordField.setEnable(false);
+                    keywordField.setEnabled(false);
                     expressionBuilderButton.setEnabled(false);
                 }
                 else {
-                    keywordField.setEnable(true);
+                    keywordField.setEnabled(true);
                     expressionBuilderButton.setEnabled(true);
                 }
             }
@@ -108,7 +113,7 @@ public class SearchBar extends JToolBar {
             searchAllDirsCheckBox.setSelected(false);
             searchQueryField.setText("");
             noKeywordsCheckBox.setSelected(false);
-            keywordField.setKeywords(List.of());
+            keywordField.clear();
             filterCurrentViewCheckBox.setSelected(false);
             keywordExpression = null;
             expressionLabel.setText("");
