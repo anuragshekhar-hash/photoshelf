@@ -14,6 +14,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
@@ -314,6 +315,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             label.addMouseListener(createImageMouseListener());
             imagePanelManager.addImageLabel(label);
         } catch (Exception e) {
+            e.printStackTrace();
             System.err.println("Could not create thumbnail for new file: " + e.getMessage());
         }
     }
@@ -403,7 +405,14 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
         BufferedImage originalImage = ImageIO.read(imgFile);
         if (originalImage == null) {
-            throw new IOException("Unsupported image format: " + imgFile.getName());
+            originalImage = new BufferedImage(maxWidth, maxHeight, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2d = originalImage.createGraphics();
+            g2d.setFont(new Font("Serif", Font.BOLD, 24));
+            g2d.setColor(Color.RED);
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.drawString("Failed", 0, maxHeight/2);
+            System.out.println("Unsupported image format: " + imgFile.getName());
+            g2d.dispose();
         }
 
         int imgWidth = originalImage.getWidth();
@@ -416,6 +425,10 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             double scale = Math.min((double) maxWidth / imgWidth, (double) maxHeight / imgHeight);
             int newWidth = (int) (imgWidth * scale);
             int newHeight = (int) (imgHeight * scale);
+
+            // Ensure dimensions are at least 1x1 to prevent exceptions when creating the image
+            newWidth = Math.max(1, newWidth);
+            newHeight = Math.max(1, newHeight);
 
             BufferedImage scaledImage = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2d = scaledImage.createGraphics();
@@ -446,10 +459,15 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
                     JLabel label = (JLabel) com;
                     try {
                         ImageIcon newIcon = createDisplayIcon((File) label.getClientProperty("imageFile"), newSize, newSize);
+                        if (newIcon == null) return null;
                         label.setIcon(newIcon);
                         label.setPreferredSize(new Dimension(newSize + 8, newSize + 40));
                         publish(label);
+                    } catch (ClosedByInterruptException e) {
+                        // This is expected if the resize operation is cancelled by the user.
+                        // We can safely ignore it and let the worker thread terminate.
                     } catch (IOException e) {
+                        e.printStackTrace();
                         System.err.println("Failed to resize thumbnail: " + e.getMessage());
                     }
                 }

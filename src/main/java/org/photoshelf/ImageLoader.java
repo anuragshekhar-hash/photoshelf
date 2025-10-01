@@ -95,6 +95,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
             Callable<JLabel> task = () -> {
                 try {
                     ImageIcon icon = ui.createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
+                    if (icon == null) return null;
                     String name = imgFile.getName();
                     String shortName = name.length() > 20 ? name.substring(0, 17) + "..." : name;
                     JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
