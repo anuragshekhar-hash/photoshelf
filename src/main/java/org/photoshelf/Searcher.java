@@ -6,13 +6,13 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 public class Searcher extends SwingWorker<Void, JLabel> {
     private final File searchRoot;
@@ -30,40 +30,56 @@ public class Searcher extends SwingWorker<Void, JLabel> {
     @Override
     protected Void doInBackground() throws IOException {
         int maxDepth = searchParam.isRecursive() ? Integer.MAX_VALUE : 1;
-        try (Stream<Path> stream = Files.walk(searchRoot.toPath(), maxDepth)) {
-            stream.parallel()
-                    .filter(path -> !isCancelled())
-                    .filter(path -> {
-                        File file = path.toFile();
-                        if (file.isDirectory()) {
-                            return false;
-                        }
-                        if (!isSupported(file.getName().toLowerCase())) {
-                            return false;
-                        }
-                        boolean matches = true;
-                        if (matches && searchParam.hasSearchString()) {
-                            matches = file.getName().toLowerCase().contains(searchParam.getSearchString());
-                        }
-                        if (matches && searchParam.hasKeyword()) {
-                            Set<String> keywords = mainApp.getKeywordManager().getKeywords(file);
-                            if (searchParam.isNoKeywords()) {
-                                matches = keywords.isEmpty();
-                            } else {
-                                matches = searchParam.evaluate(keywords);
-                            }
-                        }
-                        return matches;
-                    })
-                    .forEach(path -> {
-                        filesFound.incrementAndGet();
-                        try {
-                            publish(createImageLabel(path.toFile()));
-                        } catch (IOException e) {
-                            System.err.println("Could not create thumbnail for new file: " + e.getMessage());
-                        }
-                    });
-        }
+
+        Files.walkFileTree(searchRoot.toPath(), EnumSet.noneOf(FileVisitOption.class), maxDepth, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                if (Files.isHidden(dir)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+                if (isCancelled()) {
+                    return FileVisitResult.TERMINATE;
+                }
+
+                File file = path.toFile();
+
+                if (!isSupported(file.getName().toLowerCase())) {
+                    return FileVisitResult.CONTINUE;
+                }
+
+                boolean matches = true;
+                if (searchParam.hasSearchString()) {
+                    matches = file.getName().toLowerCase().contains(searchParam.getSearchString());
+                }
+
+                if (matches && searchParam.hasKeyword()) {
+                    Set<String> keywords = mainApp.getKeywordManager().getKeywords(file);
+                    if (searchParam.isNoKeywords()) {
+                        matches = keywords.isEmpty();
+                    } else {
+                        matches = searchParam.evaluate(keywords);
+                    }
+                }
+
+                if (matches) {
+                    filesFound.incrementAndGet();
+                    publish(createImageLabel(file));
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                System.err.println("Failed to access file: " + file + " - " + exc.getMessage());
+                return FileVisitResult.CONTINUE;
+            }
+        });
+
         return null;
     }
 
