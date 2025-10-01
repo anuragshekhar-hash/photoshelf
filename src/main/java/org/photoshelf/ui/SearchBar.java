@@ -6,7 +6,7 @@ import org.photoshelf.SearchParams;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ItemEvent;
 import java.util.List;
 
 public class SearchBar extends JToolBar {
@@ -19,39 +19,10 @@ public class SearchBar extends JToolBar {
     private String keywordExpression;
     private final JLabel expressionLabel;
 
-    class SearchAction implements ActionListener {
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            SearchParams searchParams = new SearchParams();
-            searchParams.setRecursive(isRecursive());
-            if (noKeywordsCheckBox.isSelected()) {
-                searchParams.setNoKeywords(true);
-            } else if (keywordExpression != null && !keywordExpression.isBlank()) {
-                searchParams.setExpression(keywordExpression);
-            } else {
-                try {
-                    List<String> keywords = keywordField.getParsedTokens();
-                    if (!keywords.isEmpty()) {
-                        searchParams.setExpression(keywordField.getText());
-                    }
-                }
-                catch (ParseException pe) {
-                    JOptionPane.showMessageDialog(mainApp, pe.getMessage(), "Parsing Error", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-            String pattern = getSearchQuery();
-            if (pattern != null && !pattern.isBlank()) {
-                searchParams.setSearchString(pattern.trim());
-            }
-            mainApp.executeSearch(searchParams, filterCurrentViewCheckBox.isSelected());
-        }
-    }
-
     public SearchBar(PhotoShelfUI mainApp) {
         this.mainApp = mainApp;
         setFloatable(true);
-
-        SearchAction searchAction = new SearchAction();
+        setLayout(new FlowLayout(FlowLayout.LEFT));
 
         // --- Components ---
         searchAllDirsCheckBox = new JCheckBox("Recursive");
@@ -59,61 +30,45 @@ public class SearchBar extends JToolBar {
 
         searchQueryField = new JTextField(15);
         searchQueryField.setToolTipText("Enter a search pattern for file names and press Enter");
-        searchQueryField.addActionListener(searchAction);
+        searchQueryField.addActionListener(e -> performSearch());
 
         keywordField = new ExpressionTextBox(15, mainApp.getKeywordManager());
-        keywordField.setToolTipText("Enter comma-separated keywords and press Enter");
-        keywordField.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    e.consume(); // Prevent newline in text area
-                    searchAction.actionPerformed(new ActionEvent(e.getSource(), ActionEvent.ACTION_PERFORMED, null));
-                }
-            }
-        });
+        keywordField.setToolTipText("Enter a keyword expression and press Enter");
+        keywordField.addActionListener(e -> performSearch());
 
-        noKeywordsCheckBox = new JCheckBox("No Keywords");
+        noKeywordsCheckBox = new JCheckBox("Without Keywords");
         noKeywordsCheckBox.setToolTipText("Find images that have no keywords");
 
-        filterCurrentViewCheckBox = new JCheckBox("Filter current view");
+        filterCurrentViewCheckBox = new JCheckBox("Filter view");
         filterCurrentViewCheckBox.setToolTipText("Apply search criteria to the images currently shown in the grid");
 
-        JButton expressionBuilderButton = new JButton("Expression...");
+        JButton expressionBuilderButton = new JButton("...");
+        expressionBuilderButton.setToolTipText("Open Visual Keyword Expression Builder");
         expressionLabel = new JLabel("");
         expressionBuilderButton.addActionListener(e -> {
             VisualKeywordExpressionBuilderDialog dialog = new VisualKeywordExpressionBuilderDialog(mainApp, mainApp.getKeywordManager(), keywordExpression);
             dialog.setVisible(true);
-            String newExpression = dialog.getExpression();
-            if (newExpression != null) {
-                keywordExpression = newExpression;
+            if (dialog.getResponce()) {
+                keywordExpression = dialog.getExpression();
                 expressionLabel.setText(" " + keywordExpression);
             }
         });
 
-        noKeywordsCheckBox.addItemListener(new ItemListener() {
-            @Override
-            public void itemStateChanged(ItemEvent e) {
-                if (e.getStateChange() == ItemEvent.SELECTED) {
-                    keywordField.setEnabled(false);
-                    expressionBuilderButton.setEnabled(false);
-                }
-                else {
-                    keywordField.setEnabled(true);
-                    expressionBuilderButton.setEnabled(true);
-                }
-            }
+        noKeywordsCheckBox.addItemListener(e -> {
+            boolean isSelected = e.getStateChange() == ItemEvent.SELECTED;
+            keywordField.setEnabled(!isSelected);
+            expressionBuilderButton.setEnabled(!isSelected);
         });
 
         JButton searchButton = new JButton("Search");
-        searchButton.addActionListener(searchAction);
+        searchButton.addActionListener(e -> performSearch());
 
         JButton clearButton = new JButton("Clear");
         clearButton.addActionListener(e -> {
             searchAllDirsCheckBox.setSelected(false);
             searchQueryField.setText("");
             noKeywordsCheckBox.setSelected(false);
-            keywordField.clear();
+            keywordField.setText("");
             filterCurrentViewCheckBox.setSelected(false);
             keywordExpression = null;
             expressionLabel.setText("");
@@ -121,25 +76,48 @@ public class SearchBar extends JToolBar {
         });
 
         // --- Layout ---
-        setLayout(new FlowLayout(FlowLayout.LEFT));
-        add(new JLabel("Scope:"));
-        add(searchAllDirsCheckBox);
-        addSeparator();
-
         add(new JLabel("File Name:"));
         add(searchQueryField);
         addSeparator();
 
         add(new JLabel("Keywords:"));
-        add(keywordField);
         add(noKeywordsCheckBox);
+        add(keywordField);
         add(expressionBuilderButton);
         add(expressionLabel);
         addSeparator();
 
+        add(searchAllDirsCheckBox);
         add(filterCurrentViewCheckBox);
+        addSeparator();
+
         add(searchButton);
         add(clearButton);
+    }
+
+    private void performSearch() {
+        SearchParams searchParams = new SearchParams();
+        searchParams.setRecursive(isRecursive());
+        if (noKeywordsCheckBox.isSelected()) {
+            searchParams.setNoKeywords(true);
+        } else if (keywordExpression != null && !keywordExpression.isBlank()) {
+            searchParams.setExpression(keywordExpression);
+        } else {
+            try {
+                List<String> keywords = keywordField.getParsedTokens();
+                if (!keywords.isEmpty()) {
+                    searchParams.setExpression(keywordField.getText());
+                }
+            } catch (ParseException pe) {
+                JOptionPane.showMessageDialog(mainApp, pe.getMessage(), "Parsing Error", JOptionPane.ERROR_MESSAGE);
+                return; // Stop the search if there's a parsing error
+            }
+        }
+        String pattern = getSearchQuery();
+        if (pattern != null && !pattern.isBlank()) {
+            searchParams.setSearchString(pattern.trim());
+        }
+        mainApp.executeSearch(searchParams, filterCurrentViewCheckBox.isSelected());
     }
 
     public String getSearchQuery() {

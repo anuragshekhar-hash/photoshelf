@@ -54,6 +54,7 @@ public class KeywordManagementDialog extends JDialog {
         JPanel addPanel = new JPanel(new BorderLayout(5, 5));
         addPanel.setBorder(BorderFactory.createTitledBorder("Add New Keywords (comma-separated)"));
         keywordEntryField = new KeywordEntryField(keywordManager);
+        keywordEntryField.setColumn(25);
         JButton addButton = new JButton("Add to All");
         addPanel.add(keywordEntryField, BorderLayout.CENTER);
         addPanel.add(addButton, BorderLayout.EAST);

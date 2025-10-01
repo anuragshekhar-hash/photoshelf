@@ -239,6 +239,7 @@ public class PreviewPanelManager {
         ((JPanel) dialog.getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         KeywordEntryField keywordEntryField = new KeywordEntryField(keywordManager);
+        keywordEntryField.setColumn(25);
         dialog.add(keywordEntryField, BorderLayout.CENTER);
 
         JButton addButton = new JButton("Add");
