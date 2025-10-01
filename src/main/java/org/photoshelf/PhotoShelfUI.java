@@ -204,17 +204,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         model.setCurrentDirectory(dir);
         directoryTreeManager.setSelectedDirectory(dir);
         toolbarManager.setFilteredToSelection(false);
-
-        if (currentWorker != null && !currentWorker.isDone()) {
-            currentWorker.cancel(true);
-        }
-
-        if (directoryWatcherThread != null && directoryWatcherThread.isAlive()) {
-            directoryWatcherThread.interrupt();
-        }
-
-        imagePanelManager.clearImagePanel();
-        clearSelectionUI();
+        prepareForNewTask();
         duplicateFiles.clear();
 
         ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), model.getCurrentDirectory(), toolbarManager.getFilterText(), toolbarManager.getSortCriteria(), toolbarManager.isSortDescending(), toolbarManager.isShowDuplicates(), imagePanelManager.getThumbnailSize());
@@ -283,17 +273,10 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     }
 
     public void search(SearchParams params) {
-        if (currentWorker != null && !currentWorker.isDone()) {
-            currentWorker.cancel(true);
-        }
-        if (directoryWatcherThread != null && directoryWatcherThread.isAlive()) {
-            directoryWatcherThread.interrupt();
-        }
-
-        imagePanelManager.clearImagePanel();
-        clearSelectionUI();
+        prepareForNewTask();
         setSearchStatus("Searching...");
-        Searcher searcher = new Searcher(this, getCurrentDirectory(), params);
+        String filter = toolbarManager.getFilterText().trim();
+        Searcher searcher = new Searcher(this, getCurrentDirectory(), params, filter);
         currentWorker = searcher;
         searcher.execute();
     }
@@ -695,6 +678,18 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             }
         }
         return destFile;
+    }
+
+    private void prepareForNewTask() {
+        if (currentWorker != null && !currentWorker.isDone()) {
+            currentWorker.cancel(true);
+        }
+        if (directoryWatcherThread != null && directoryWatcherThread.isAlive()) {
+            directoryWatcherThread.interrupt();
+        }
+
+        imagePanelManager.clearImagePanel();
+        clearSelectionUI();
     }
 
     public void setSearchStatus(String status) {

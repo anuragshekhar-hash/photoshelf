@@ -20,8 +20,10 @@ public class Searcher extends SwingWorker<Void, JLabel> {
     private final List<String> supportedExtensions = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp");
     private final AtomicInteger filesFound = new AtomicInteger(0);
     private final SearchParams searchParam;
+    private final String Filter;
 
-    public Searcher(PhotoShelfUI mainAppm, File searchRoot, SearchParams params) {
+    public Searcher(PhotoShelfUI mainAppm, File searchRoot, SearchParams params, String filter) {
+        this.Filter = filter;
         this.mainApp = mainAppm;
         this.searchRoot = searchRoot;
         this.searchParam = params;
@@ -51,6 +53,9 @@ public class Searcher extends SwingWorker<Void, JLabel> {
                 if (!isSupported(file.getName().toLowerCase())) {
                     return FileVisitResult.CONTINUE;
                 }
+
+                if (Filter != null && !Filter.isBlank() && !file.getName().toLowerCase().endsWith(Filter.toLowerCase()))
+                    return FileVisitResult.CONTINUE;
 
                 boolean matches = true;
                 if (searchParam.hasSearchString()) {
