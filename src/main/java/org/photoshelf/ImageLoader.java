@@ -14,6 +14,8 @@ import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.Map;
+import java.util.Set;
 
 public class ImageLoader extends SwingWorker<Integer, JLabel> {
     private final File directory;
@@ -45,17 +47,22 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
             filesToDisplay = stream
                     .filter(path -> {
                         String lower = path.getFileName().toString().toLowerCase();
+                        if (lower.lastIndexOf('.') == -1) return false;
                         String extension = lower.substring(lower.lastIndexOf('.') + 1);
-                        return SUPPORTED_EXTENSIONS.contains(extension) && (filterText.isEmpty() || filterText.equals(extension));
+                        return SUPPORTED_EXTENSIONS.contains(extension) && (filterText.isEmpty() || lower.contains(filterText));
                     })
                     .map(Path::toFile)
                     .collect(Collectors.toList());
         }
 
         if (showOnlyDuplicates) {
-            DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
-            ui.setDuplicateFiles(duplicateFinder.findDuplicates(filesToDisplay));
-            filesToDisplay = new ArrayList<>(ui.getDuplicateFiles());
+           /* DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
+            Map<String, Set<File>> duplicateGroups = duplicateFinder.findDuplicates(filesToDisplay);
+            ui.setDuplicateFiles(duplicateGroups);
+            filesToDisplay.clear();
+            for (Set<File> group : duplicateGroups.values()) {
+                filesToDisplay.addAll(group);
+            }*/
         }
 
         Comparator<File> comparator = switch (sortCriteria) {
@@ -98,7 +105,8 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
                     JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
                     label.setHorizontalTextPosition(JLabel.CENTER);
                     label.setVerticalTextPosition(JLabel.BOTTOM);
-                    label.setBorder(ui.isDuplicate(imgFile) ? BorderFactory.createLineBorder(Color.RED, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
+                    Color borderColor = ui.getDuplicateBorderColor(imgFile);
+                    label.setBorder(borderColor != null ? BorderFactory.createLineBorder(borderColor, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
                     label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                     label.putClientProperty("imageFile", imgFile);
                     label.setPreferredSize(new java.awt.Dimension(thumbnailSize + 8, thumbnailSize + 40));

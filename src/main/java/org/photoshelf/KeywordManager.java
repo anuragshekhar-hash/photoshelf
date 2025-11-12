@@ -4,11 +4,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class KeywordManager {
@@ -155,5 +151,10 @@ public class KeywordManager {
         } catch (IOException e) {
             System.err.println("Error saving keywords: " + e.getMessage());
         }
+    }
+
+    public void addKeywords(File newFile, ArrayList<String> strings) {
+        for(String s : strings)
+        addKeyword(newFile, s);
     }
 }

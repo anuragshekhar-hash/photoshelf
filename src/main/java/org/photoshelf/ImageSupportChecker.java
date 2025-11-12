@@ -1,9 +1,14 @@
 package org.photoshelf;
 
+import org.apache.commons.io.FilenameUtils;
+import static org.photoshelf.ImageLoader.SUPPORTED_EXTENSIONS;
+
 import javax.imageio.ImageIO;
+import java.io.File;
 import java.util.Arrays;
 
 public class ImageSupportChecker {
+
     /**
      * Checks if the current Java environment has a registered ImageIO plugin
      * that can read AVIF files.
@@ -15,5 +20,10 @@ public class ImageSupportChecker {
         // file suffixes (extensions) it supports.
         String[] supportedReadFormats = ImageIO.getReaderFileSuffixes();
         return Arrays.asList(supportedReadFormats).contains("avif");
+    }
+
+    public static boolean isImage(File file) {
+        String ext = FilenameUtils.getExtension(file.getName());
+        return SUPPORTED_EXTENSIONS.contains(ext.toLowerCase());
     }
 }

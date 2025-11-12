@@ -2,6 +2,8 @@ package org.photoshelf;
 
 import org.photoshelf.ui.ImagePanelManager;
 import org.photoshelf.ui.SelectionCallback;
+import org.photoshelf.ui.ScrollablePanel;
+import org.photoshelf.ui.WrapLayout;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -29,9 +31,12 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private final StatusPanelManager statusPanelManager;
     private Thread directoryWatcherThread;
     private final HybridCache<String, ImageIcon> thumbnailCache;
-    private final Set<File> duplicateFiles = new HashSet<>();
+    private final Map<File, Color> duplicateFileGroups = new HashMap<>();
     private SwingWorker<Void, JLabel> resizerWorker;
     private final KeywordManager keywordManager;
+    private JSplitPane duplicatesSplitPane;
+    private ScrollablePanel duplicateGroupsPanel;
+    private ScrollablePanel duplicateFilesPanel;
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -62,6 +67,8 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         JSplitPane topSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, previewPanelManager.getPreviewScroll());
         topSplit.setDividerLocation(250);
 
+        setupDuplicatePanels();
+
         JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplit, imagePanelManager.getPanel());
         mainSplit.setDividerLocation(320);
         add(mainSplit, BorderLayout.CENTER);
@@ -76,6 +83,19 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
                 thumbnailCache.shutdown();
             }
         });
+    }
+
+    private void setupDuplicatePanels() {
+        duplicateGroupsPanel = new ScrollablePanel();
+        duplicateGroupsPanel.setLayout(new WrapLayout(FlowLayout.LEFT));
+        duplicateFilesPanel = new ScrollablePanel();
+        duplicateFilesPanel.setLayout(new WrapLayout(FlowLayout.LEFT));
+
+        JScrollPane duplicateGroupsScrollPane = new JScrollPane(duplicateGroupsPanel);
+        JScrollPane duplicateFilesScrollPane = new JScrollPane(duplicateFilesPanel);
+
+        duplicatesSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, duplicateGroupsScrollPane, duplicateFilesScrollPane);
+        duplicatesSplitPane.setDividerLocation(250);
     }
 
     private JMenuBar createMenuBar() {
@@ -101,7 +121,91 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         deselectAllItem.addActionListener(e -> clearSelectionUI());
         selectionMenu.add(deselectAllItem);
 
+        JMenu toolsMenu = new JMenu("Tools");
+        menuBar.add(toolsMenu);
+
+        JMenuItem findDuplicatesItem = new JMenuItem("Find Duplicates");
+        findDuplicatesItem.addActionListener(e -> findDuplicates());
+        toolsMenu.add(findDuplicatesItem);
+
         return menuBar;
+    }
+
+    private void findDuplicates() {
+        prepareForNewTask();
+        imagePanelManager.getPanel().setVisible(false);
+        duplicatesSplitPane.setVisible(true);
+        setSearchStatus("Scanning for duplicates...");
+        currentWorker = new DuplicateScanner(this, model.getCurrentDirectory());
+        currentWorker.execute();
+    }
+
+    public void displayDuplicateGroups(Map<String, Set<File>> duplicateGroups) {
+        duplicateGroupsPanel.removeAll();
+        for (Map.Entry<String, Set<File>> entry : duplicateGroups.entrySet()) {
+            File representative = entry.getValue().iterator().next();
+            try {
+                ImageIcon icon = createDisplayIcon(representative, 100, 100);
+                JLabel groupLabel = new JLabel(icon);
+                groupLabel.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        displayDuplicateFiles(entry.getValue());
+                    }
+                });
+                duplicateGroupsPanel.add(groupLabel);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        duplicateGroupsPanel.revalidate();
+        duplicateGroupsPanel.repaint();
+        setSearchStatus("Found " + duplicateGroups.size() + " duplicate groups.");
+    }
+
+    private void displayDuplicateFiles(Set<File> files) {
+        duplicateFilesPanel.removeAll();
+        for (File file : files) {
+            try {
+                ImageIcon icon = createDisplayIcon(file, 150, 150);
+                JLabel label = new JLabel(file.getName(), icon, JLabel.CENTER);
+                label.setHorizontalTextPosition(JLabel.CENTER);
+                label.setVerticalTextPosition(JLabel.BOTTOM);
+                label.putClientProperty("imageFile", file);
+                label.addMouseListener(createDuplicateFileMouseListener());
+                duplicateFilesPanel.add(label);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        duplicateFilesPanel.revalidate();
+        duplicateFilesPanel.repaint();
+    }
+
+    private MouseAdapter createDuplicateFileMouseListener() {
+        return new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                JLabel clickedLabel = (JLabel) e.getSource();
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    if (!model.isSelected(clickedLabel)) {
+                        clearSelectionUI();
+                        addToSelectionUI(clickedLabel);
+                    }
+                    showImageOptions();
+                } else if (SwingUtilities.isLeftMouseButton(e)) {
+                    File imgFile = (File) clickedLabel.getClientProperty("imageFile");
+                    previewPanelManager.showImagePreview(imgFile);
+                    statusPanelManager.updatePreviewFile(imgFile.getName());
+                    if (e.isControlDown() || e.isMetaDown()) {
+                        toggleSelectionUI(clickedLabel);
+                    } else {
+                        clearSelectionUI();
+                        addToSelectionUI(clickedLabel);
+                    }
+                }
+            }
+        };
     }
 
     private void selectByKeywords() {
@@ -205,7 +309,10 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         directoryTreeManager.setSelectedDirectory(dir);
         toolbarManager.setFilteredToSelection(false);
         prepareForNewTask();
-        duplicateFiles.clear();
+        duplicateFileGroups.clear();
+
+        imagePanelManager.getPanel().setVisible(true);
+        duplicatesSplitPane.setVisible(false);
 
         ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), model.getCurrentDirectory(), toolbarManager.getFilterText(), toolbarManager.getSortCriteria(), toolbarManager.isSortDescending(), toolbarManager.isShowDuplicates(), imagePanelManager.getThumbnailSize());
         currentWorker = imageLoader;
@@ -338,8 +445,9 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
     public void clearSelectionUI() {
         for (JLabel label : model.getSelectedLabels()) {
-            if (isDuplicate((File) label.getClientProperty("imageFile"))) {
-                label.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
+            Color borderColor = getDuplicateBorderColor((File) label.getClientProperty("imageFile"));
+            if (borderColor != null) {
+                label.setBorder(BorderFactory.createLineBorder(borderColor, 2));
             } else {
                 label.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
             }
@@ -357,8 +465,9 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private void toggleSelectionUI(JLabel label) {
         if (model.isSelected(label)) {
             model.removeFromSelection(label);
-            if (isDuplicate((File) label.getClientProperty("imageFile"))) {
-                label.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
+            Color borderColor = getDuplicateBorderColor((File) label.getClientProperty("imageFile"));
+            if (borderColor != null) {
+                label.setBorder(BorderFactory.createLineBorder(borderColor, 2));
             } else {
                 label.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
             }
@@ -521,8 +630,36 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         menu.add(new JSeparator());
         menu.add(manageKeywordsItem);
 
+        File firstSelectedFile = (File) selectedLabels.get(0).getClientProperty("imageFile");
+        if (firstSelectedFile.getName().toLowerCase().endsWith(".webp")) {
+            JMenuItem convertToJpegItem = new JMenuItem("Convert to JPEG");
+            convertToJpegItem.addActionListener(e -> handleConvertToJpeg(selectedLabels.get(0)));
+            menu.add(convertToJpegItem);
+        }
+
         menu.show(imagePanelManager.getImagePanel(), MouseInfo.getPointerInfo().getLocation().x - imagePanelManager.getImagePanel().getLocationOnScreen().x,
                 MouseInfo.getPointerInfo().getLocation().y - imagePanelManager.getImagePanel().getLocationOnScreen().y);
+    }
+
+    private void handleConvertToJpeg(JLabel label) {
+        File webpFile = (File) label.getClientProperty("imageFile");
+        try {
+            BufferedImage image = ImageIO.read(webpFile);
+            if (image == null) {
+                JOptionPane.showMessageDialog(this, "Could not read WebP image.", "Conversion Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            String newName = webpFile.getName().substring(0, webpFile.getName().lastIndexOf('.')) + ".jpg";
+            File newFile = new File(webpFile.getParentFile(), newName);
+            ImageIO.write(image, "jpg", newFile);
+
+            Set<String> keywords = keywordManager.getKeywords(webpFile);
+            keywordManager.addKeywords(newFile, new ArrayList<>(keywords));
+
+            displayImages(model.getCurrentDirectory());
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Error converting to JPEG: " + e.getMessage(), "Conversion Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void handleManageKeywords(List<JLabel> labels) {
@@ -696,17 +833,25 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         statusPanelManager.setSearchStatus(status);
     }
 
-    public boolean isDuplicate(File file) {
-        return duplicateFiles.contains(file);
+    public Color getDuplicateBorderColor(File file) {
+        return duplicateFileGroups.get(file);
     }
 
-    public void setDuplicateFiles(Set<File> duplicates) {
-        this.duplicateFiles.clear();
-        this.duplicateFiles.addAll(duplicates);
+    public void setDuplicateFiles(Map<String, Set<File>> duplicateGroups) {
+        this.duplicateFileGroups.clear();
+        Color[] colors = {Color.RED, Color.GREEN, Color.BLUE, Color.ORANGE, Color.MAGENTA, Color.CYAN};
+        int colorIndex = 0;
+        for (Set<File> group : duplicateGroups.values()) {
+            Color groupColor = colors[colorIndex % colors.length];
+            for (File file : group) {
+                this.duplicateFileGroups.put(file, groupColor);
+            }
+            colorIndex++;
+        }
     }
 
-    public Set<File> getDuplicateFiles() {
-        return duplicateFiles;
+    public Map<File, Color> getDuplicateFileGroups() {
+        return duplicateFileGroups;
     }
 
     public KeywordManager getKeywordManager() {
