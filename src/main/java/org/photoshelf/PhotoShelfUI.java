@@ -2,8 +2,6 @@ package org.photoshelf;
 
 import org.photoshelf.ui.ImagePanelManager;
 import org.photoshelf.ui.SelectionCallback;
-import org.photoshelf.ui.ScrollablePanel;
-import org.photoshelf.ui.WrapLayout;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -31,12 +29,9 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private final StatusPanelManager statusPanelManager;
     private Thread directoryWatcherThread;
     private final HybridCache<String, ImageIcon> thumbnailCache;
-    private final Map<File, Color> duplicateFileGroups = new HashMap<>();
+    private final Set<File> duplicateFiles = new HashSet<>();
     private SwingWorker<Void, JLabel> resizerWorker;
     private final KeywordManager keywordManager;
-    private JSplitPane duplicatesSplitPane;
-    private ScrollablePanel duplicateGroupsPanel;
-    private ScrollablePanel duplicateFilesPanel;
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -67,8 +62,6 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         JSplitPane topSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, previewPanelManager.getPreviewScroll());
         topSplit.setDividerLocation(250);
 
-        setupDuplicatePanels();
-
         JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplit, imagePanelManager.getPanel());
         mainSplit.setDividerLocation(320);
         add(mainSplit, BorderLayout.CENTER);
@@ -83,19 +76,6 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
                 thumbnailCache.shutdown();
             }
         });
-    }
-
-    private void setupDuplicatePanels() {
-        duplicateGroupsPanel = new ScrollablePanel();
-        duplicateGroupsPanel.setLayout(new WrapLayout(FlowLayout.LEFT));
-        duplicateFilesPanel = new ScrollablePanel();
-        duplicateFilesPanel.setLayout(new WrapLayout(FlowLayout.LEFT));
-
-        JScrollPane duplicateGroupsScrollPane = new JScrollPane(duplicateGroupsPanel);
-        JScrollPane duplicateFilesScrollPane = new JScrollPane(duplicateFilesPanel);
-
-        duplicatesSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, duplicateGroupsScrollPane, duplicateFilesScrollPane);
-        duplicatesSplitPane.setDividerLocation(250);
     }
 
     private JMenuBar createMenuBar() {
@@ -121,91 +101,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         deselectAllItem.addActionListener(e -> clearSelectionUI());
         selectionMenu.add(deselectAllItem);
 
-        JMenu toolsMenu = new JMenu("Tools");
-        menuBar.add(toolsMenu);
-
-        JMenuItem findDuplicatesItem = new JMenuItem("Find Duplicates");
-        findDuplicatesItem.addActionListener(e -> findDuplicates());
-        toolsMenu.add(findDuplicatesItem);
-
         return menuBar;
-    }
-
-    private void findDuplicates() {
-        prepareForNewTask();
-        imagePanelManager.getPanel().setVisible(false);
-        duplicatesSplitPane.setVisible(true);
-        setSearchStatus("Scanning for duplicates...");
-        currentWorker = new DuplicateScanner(this, model.getCurrentDirectory());
-        currentWorker.execute();
-    }
-
-    public void displayDuplicateGroups(Map<String, Set<File>> duplicateGroups) {
-        duplicateGroupsPanel.removeAll();
-        for (Map.Entry<String, Set<File>> entry : duplicateGroups.entrySet()) {
-            File representative = entry.getValue().iterator().next();
-            try {
-                ImageIcon icon = createDisplayIcon(representative, 100, 100);
-                JLabel groupLabel = new JLabel(icon);
-                groupLabel.addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        displayDuplicateFiles(entry.getValue());
-                    }
-                });
-                duplicateGroupsPanel.add(groupLabel);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        duplicateGroupsPanel.revalidate();
-        duplicateGroupsPanel.repaint();
-        setSearchStatus("Found " + duplicateGroups.size() + " duplicate groups.");
-    }
-
-    private void displayDuplicateFiles(Set<File> files) {
-        duplicateFilesPanel.removeAll();
-        for (File file : files) {
-            try {
-                ImageIcon icon = createDisplayIcon(file, 150, 150);
-                JLabel label = new JLabel(file.getName(), icon, JLabel.CENTER);
-                label.setHorizontalTextPosition(JLabel.CENTER);
-                label.setVerticalTextPosition(JLabel.BOTTOM);
-                label.putClientProperty("imageFile", file);
-                label.addMouseListener(createDuplicateFileMouseListener());
-                duplicateFilesPanel.add(label);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        duplicateFilesPanel.revalidate();
-        duplicateFilesPanel.repaint();
-    }
-
-    private MouseAdapter createDuplicateFileMouseListener() {
-        return new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                JLabel clickedLabel = (JLabel) e.getSource();
-                if (SwingUtilities.isRightMouseButton(e)) {
-                    if (!model.isSelected(clickedLabel)) {
-                        clearSelectionUI();
-                        addToSelectionUI(clickedLabel);
-                    }
-                    showImageOptions();
-                } else if (SwingUtilities.isLeftMouseButton(e)) {
-                    File imgFile = (File) clickedLabel.getClientProperty("imageFile");
-                    previewPanelManager.showImagePreview(imgFile);
-                    statusPanelManager.updatePreviewFile(imgFile.getName());
-                    if (e.isControlDown() || e.isMetaDown()) {
-                        toggleSelectionUI(clickedLabel);
-                    } else {
-                        clearSelectionUI();
-                        addToSelectionUI(clickedLabel);
-                    }
-                }
-            }
-        };
     }
 
     private void selectByKeywords() {
@@ -309,10 +205,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         directoryTreeManager.setSelectedDirectory(dir);
         toolbarManager.setFilteredToSelection(false);
         prepareForNewTask();
-        duplicateFileGroups.clear();
-
-        imagePanelManager.getPanel().setVisible(true);
-        duplicatesSplitPane.setVisible(false);
+        duplicateFiles.clear();
 
         ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), model.getCurrentDirectory(), toolbarManager.getFilterText(), toolbarManager.getSortCriteria(), toolbarManager.isSortDescending(), toolbarManager.isShowDuplicates(), imagePanelManager.getThumbnailSize());
         currentWorker = imageLoader;
@@ -445,9 +338,8 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
     public void clearSelectionUI() {
         for (JLabel label : model.getSelectedLabels()) {
-            Color borderColor = getDuplicateBorderColor((File) label.getClientProperty("imageFile"));
-            if (borderColor != null) {
-                label.setBorder(BorderFactory.createLineBorder(borderColor, 2));
+            if (isDuplicate((File) label.getClientProperty("imageFile"))) {
+                label.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
             } else {
                 label.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
             }
@@ -465,9 +357,8 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private void toggleSelectionUI(JLabel label) {
         if (model.isSelected(label)) {
             model.removeFromSelection(label);
-            Color borderColor = getDuplicateBorderColor((File) label.getClientProperty("imageFile"));
-            if (borderColor != null) {
-                label.setBorder(BorderFactory.createLineBorder(borderColor, 2));
+            if (isDuplicate((File) label.getClientProperty("imageFile"))) {
+                label.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
             } else {
                 label.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
             }
@@ -833,25 +724,17 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         statusPanelManager.setSearchStatus(status);
     }
 
-    public Color getDuplicateBorderColor(File file) {
-        return duplicateFileGroups.get(file);
+    public boolean isDuplicate(File file) {
+        return duplicateFiles.contains(file);
     }
 
-    public void setDuplicateFiles(Map<String, Set<File>> duplicateGroups) {
-        this.duplicateFileGroups.clear();
-        Color[] colors = {Color.RED, Color.GREEN, Color.BLUE, Color.ORANGE, Color.MAGENTA, Color.CYAN};
-        int colorIndex = 0;
-        for (Set<File> group : duplicateGroups.values()) {
-            Color groupColor = colors[colorIndex % colors.length];
-            for (File file : group) {
-                this.duplicateFileGroups.put(file, groupColor);
-            }
-            colorIndex++;
-        }
+    public void setDuplicateFiles(Set<File> duplicates) {
+        this.duplicateFiles.clear();
+        this.duplicateFiles.addAll(duplicates);
     }
 
-    public Map<File, Color> getDuplicateFileGroups() {
-        return duplicateFileGroups;
+    public Set<File> getDuplicateFiles() {
+        return duplicateFiles;
     }
 
     public KeywordManager getKeywordManager() {

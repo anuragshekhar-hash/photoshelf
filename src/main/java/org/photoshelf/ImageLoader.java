@@ -14,8 +14,6 @@ import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.Map;
-import java.util.Set;
 
 public class ImageLoader extends SwingWorker<Integer, JLabel> {
     private final File directory;
@@ -56,13 +54,9 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
         }
 
         if (showOnlyDuplicates) {
-           /* DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
-            Map<String, Set<File>> duplicateGroups = duplicateFinder.findDuplicates(filesToDisplay);
-            ui.setDuplicateFiles(duplicateGroups);
-            filesToDisplay.clear();
-            for (Set<File> group : duplicateGroups.values()) {
-                filesToDisplay.addAll(group);
-            }*/
+            DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
+            ui.setDuplicateFiles(duplicateFinder.findDuplicates(filesToDisplay));
+            filesToDisplay = new ArrayList<>(ui.getDuplicateFiles());
         }
 
         Comparator<File> comparator = switch (sortCriteria) {
@@ -105,8 +99,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
                     JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
                     label.setHorizontalTextPosition(JLabel.CENTER);
                     label.setVerticalTextPosition(JLabel.BOTTOM);
-                    Color borderColor = ui.getDuplicateBorderColor(imgFile);
-                    label.setBorder(borderColor != null ? BorderFactory.createLineBorder(borderColor, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
+                    label.setBorder(ui.isDuplicate(imgFile) ? BorderFactory.createLineBorder(Color.RED, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
                     label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                     label.putClientProperty("imageFile", imgFile);
                     label.setPreferredSize(new java.awt.Dimension(thumbnailSize + 8, thumbnailSize + 40));
