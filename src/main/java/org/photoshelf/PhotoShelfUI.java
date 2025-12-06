@@ -547,6 +547,15 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             Set<String> keywords = keywordManager.getKeywords(webpFile);
             keywordManager.addKeywords(newFile, new ArrayList<>(keywords));
 
+            int result = JOptionPane.showConfirmDialog(this, "Would you like to delete the original WebP file?", "Delete Original?", JOptionPane.YES_NO_OPTION);
+            if (result == JOptionPane.YES_OPTION) {
+                try {
+                    model.deleteImage(webpFile);
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, "Could not delete original file: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+
             displayImages(model.getCurrentDirectory());
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Error converting to JPEG: " + e.getMessage(), "Conversion Error", JOptionPane.ERROR_MESSAGE);
