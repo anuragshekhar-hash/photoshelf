@@ -32,6 +32,8 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private final Set<File> duplicateFiles = new HashSet<>();
     private SwingWorker<Void, JLabel> resizerWorker;
     private final KeywordManager keywordManager;
+    private final PHashCacheManager pHashCacheManager;
+    private final Set<String> warmedDirectories = new HashSet<>();
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -48,6 +50,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         previewPanelManager = new PreviewPanelManager(keywordManager);
         statusPanelManager = new StatusPanelManager();
         thumbnailCache = new HybridCache<>("thumbnails", 200);
+        pHashCacheManager = new PHashCacheManager();
 
         setJMenuBar(createMenuBar());
 
@@ -74,6 +77,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             @Override
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
                 thumbnailCache.shutdown();
+                pHashCacheManager.saveCache();
             }
         });
     }
@@ -207,6 +211,14 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         prepareForNewTask();
         duplicateFiles.clear();
 
+        if (!warmedDirectories.contains(dir.getAbsolutePath())) {
+            setSearchStatus("Warming cache in background...");
+            new CacheWarmer(pHashCacheManager, dir, (d) -> {
+                warmedDirectories.add(d.getAbsolutePath());
+                setSearchStatus(null);
+            }).execute();
+        }
+
         ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), model.getCurrentDirectory(), toolbarManager.getFilterText(), toolbarManager.getSortCriteria(), toolbarManager.isSortDescending(), toolbarManager.isShowDuplicates(), imagePanelManager.getThumbnailSize());
         currentWorker = imageLoader;
         imageLoader.addPropertyChangeListener(evt -> {
@@ -281,22 +293,29 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         searcher.execute();
     }
 
+    public JLabel createImageLabel(File imgFile, int thumbnailSize) throws IOException {
+        ImageIcon icon = createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
+        if (icon == null) return null;
+        String name = imgFile.getName();
+        String shortName = name.length() > 20 ? name.substring(0, 17) + "..." : name;
+        JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
+        label.setHorizontalTextPosition(JLabel.CENTER);
+        label.setVerticalTextPosition(JLabel.BOTTOM);
+        label.setBorder(isDuplicate(imgFile) ? BorderFactory.createLineBorder(Color.RED, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        label.putClientProperty("imageFile", imgFile);
+        label.setPreferredSize(new java.awt.Dimension(thumbnailSize + 8, thumbnailSize + 40));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        label.addMouseListener(createImageMouseListener());
+        return label;
+    }
+
     public void addNewImage(File imgFile) {
         try {
-            int thumbnailSize = imagePanelManager.getThumbnailSize();
-            ImageIcon icon = createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
-            String name = imgFile.getName();
-            String shortName = name.length() > 20 ? name.substring(0, 17) + "..." : name;
-            JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
-            label.setHorizontalTextPosition(JLabel.CENTER);
-            label.setVerticalTextPosition(JLabel.BOTTOM);
-            label.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-            label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            label.putClientProperty("imageFile", imgFile);
-            label.setPreferredSize(new java.awt.Dimension(thumbnailSize + 8, thumbnailSize + 40));
-            label.setAlignmentX(Component.LEFT_ALIGNMENT);
-            label.addMouseListener(createImageMouseListener());
-            imagePanelManager.addImageLabel(label);
+            JLabel label = createImageLabel(imgFile, imagePanelManager.getThumbnailSize());
+            if (label != null) {
+                imagePanelManager.addImageLabel(label);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             System.err.println("Could not create thumbnail for new file: " + e.getMessage());
@@ -492,6 +511,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         JMenuItem deleteItem = new JMenuItem("Delete");
         JMenuItem copyPathItem = new JMenuItem("Copy Path");
         JMenuItem manageKeywordsItem = new JMenuItem("Manage Keywords");
+        JMenuItem findDuplicatesItem = new JMenuItem("Find Duplicates");
 
         renameItem.setEnabled(selectedLabels.size() == 1);
         moveItem.setEnabled(!selectedLabels.isEmpty());
@@ -499,6 +519,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         deleteItem.setEnabled(!selectedLabels.isEmpty());
         copyPathItem.setEnabled(!selectedLabels.isEmpty());
         manageKeywordsItem.setEnabled(!selectedLabels.isEmpty());
+        findDuplicatesItem.setEnabled(selectedLabels.size() == 1);
 
         renameItem.addActionListener(e -> handleRenameImage(selectedLabels.get(0)));
         moveItem.addActionListener(e -> handleMoveImages(selectedLabels));
@@ -512,6 +533,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         });
 
         manageKeywordsItem.addActionListener(e -> handleManageKeywords(selectedLabels));
+        findDuplicatesItem.addActionListener(e -> handleFindDuplicates(selectedLabels.get(0)));
 
         menu.add(renameItem);
         menu.add(moveItem);
@@ -520,6 +542,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         menu.add(copyPathItem);
         menu.add(new JSeparator());
         menu.add(manageKeywordsItem);
+        menu.add(findDuplicatesItem);
 
         File firstSelectedFile = (File) selectedLabels.get(0).getClientProperty("imageFile");
         if (firstSelectedFile.getName().toLowerCase().endsWith(".webp")) {
@@ -530,6 +553,63 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
         menu.show(imagePanelManager.getImagePanel(), MouseInfo.getPointerInfo().getLocation().x - imagePanelManager.getImagePanel().getLocationOnScreen().x,
                 MouseInfo.getPointerInfo().getLocation().y - imagePanelManager.getImagePanel().getLocationOnScreen().y);
+    }
+
+    private void handleFindDuplicates(JLabel label) {
+        File imageFile = (File) label.getClientProperty("imageFile");
+        new SwingWorker<List<File>, Void>() {
+            @Override
+            protected List<File> doInBackground() throws Exception {
+                String targetHash = pHashCacheManager.getHash(imageFile);
+                if (targetHash == null) {
+                    return Collections.emptyList();
+                }
+                List<File> duplicates = new ArrayList<>();
+                for (String path : pHashCacheManager.getAllFilePaths()) {
+                    File otherFile = new File(path);
+                    if (otherFile.equals(imageFile) || !otherFile.exists() || !ImageSupportChecker.isImage(otherFile)) {
+                        continue;
+                    }
+                    String otherHash = pHashCacheManager.getHash(otherFile);
+                    if (otherHash != null && PHash.distance(targetHash, otherHash) <= 5) {
+                        duplicates.add(otherFile);
+                    }
+                }
+                return duplicates;
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<File> duplicates = get();
+                    duplicates.add(0, imageFile); // Add the original image to the list
+
+                    if (duplicates.size() <= 1) {
+                        JOptionPane.showMessageDialog(PhotoShelfUI.this, "No duplicates found across all scanned directories.", "Find Duplicates", JOptionPane.INFORMATION_MESSAGE);
+                        return;
+                    }
+
+                    prepareForNewTask();
+                    setSearchStatus("Showing " + duplicates.size() + " duplicate images.");
+
+                    for (File file : duplicates) {
+                        try {
+                            JLabel newLabel = createImageLabel(file, imagePanelManager.getThumbnailSize());
+                            if (newLabel != null) {
+                                imagePanelManager.addImageLabel(newLabel);
+                            }
+                        } catch (IOException e) {
+                            System.err.println("Could not create thumbnail for duplicate file: " + e.getMessage());
+                        }
+                    }
+                    imagePanelManager.getImagePanel().revalidate();
+                    imagePanelManager.getImagePanel().repaint();
+
+                } catch (InterruptedException | ExecutionException e) {
+                    JOptionPane.showMessageDialog(PhotoShelfUI.this, "Error finding duplicates: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }.execute();
     }
 
     private void handleConvertToJpeg(JLabel label) {
@@ -756,5 +836,9 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
     public void updateTotalFile(int count) {
         statusPanelManager.updateTotalFiles(count);
+    }
+
+    public PHashCacheManager getPHashCacheManager() {
+        return pHashCacheManager;
     }
 }

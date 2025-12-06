@@ -26,6 +26,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
 
     private final PhotoShelfUI ui;
     private final JPanel imagePanel;
+    private final PHashCacheManager pHashCacheManager;
 
     public ImageLoader(PhotoShelfUI ui, JPanel imagePanel, File directory, String filterText, String sortCriteria, boolean descending, boolean showOnlyDuplicates, int thumbnailSize) {
         this.ui = ui;
@@ -36,6 +37,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
         this.descending = descending;
         this.showOnlyDuplicates = showOnlyDuplicates;
         this.thumbnailSize = thumbnailSize;
+        this.pHashCacheManager = ui.getPHashCacheManager();
     }
 
     @Override
@@ -92,6 +94,9 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
 
             Callable<JLabel> task = () -> {
                 try {
+                    // This will warm the cache
+                    pHashCacheManager.getHash(imgFile);
+
                     ImageIcon icon = ui.createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
                     if (icon == null) return null;
                     String name = imgFile.getName();
