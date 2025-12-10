@@ -343,7 +343,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
                 } else if (SwingUtilities.isLeftMouseButton(e)) {
                     //directoryTreeManager.setSelectedDirectory(imgFile.getParentFile());
                     previewPanelManager.showImagePreview(imgFile);
-                    statusPanelManager.updatePreviewFile(imgFile.getName());
+                    statusPanelManager.updatePreviewFile(imgFile.getAbsolutePath());
                     if (e.isControlDown() || e.isMetaDown()) {
                         toggleSelectionUI(clickedLabel);
                     } else {

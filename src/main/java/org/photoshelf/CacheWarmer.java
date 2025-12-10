@@ -32,7 +32,7 @@ public class CacheWarmer extends SwingWorker<Void, Void> {
     }
 
     private void warmDirectory(File dir) {
-        if (isCancelled()) {
+        if (isCancelled() || dir.isHidden()) {
             return;
         }
 
