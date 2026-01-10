@@ -34,6 +34,12 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private final KeywordManager keywordManager;
     private final PHashCacheManager pHashCacheManager;
     private final Set<String> warmedDirectories = new HashSet<>();
+    private JSplitPane mainSplit;
+    private JSplitPane topSplit;
+    private JScrollPane treeScroll;
+    private JPanel duplicateListPanel;
+    private JScrollPane duplicateListScroll;
+    private boolean isDuplicateViewMode = false;
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -60,14 +66,18 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         add(topPanel, BorderLayout.NORTH);
         add(statusPanelManager.getStatusPanel(), BorderLayout.SOUTH);
 
-        JScrollPane treeScroll = new JScrollPane(directoryTreeManager.getDirectoryTree());
+        treeScroll = new JScrollPane(directoryTreeManager.getDirectoryTree());
 
-        JSplitPane topSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, previewPanelManager.getPreviewScroll());
+        topSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, previewPanelManager.getPreviewScroll());
         topSplit.setDividerLocation(250);
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplit, imagePanelManager.getPanel());
+        mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplit, imagePanelManager.getPanel());
         mainSplit.setDividerLocation(320);
         add(mainSplit, BorderLayout.CENTER);
+
+        duplicateListPanel = new JPanel();
+        duplicateListPanel.setLayout(new BoxLayout(duplicateListPanel, BoxLayout.Y_AXIS));
+        duplicateListScroll = new JScrollPane(duplicateListPanel);
 
         File rootDir = new File(System.getProperty("user.home"));
         model.setCurrentDirectory(rootDir);
@@ -105,7 +115,96 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         deselectAllItem.addActionListener(e -> clearSelectionUI());
         selectionMenu.add(deselectAllItem);
 
+        JMenu toolsMenu = new JMenu("Tools");
+        menuBar.add(toolsMenu);
+
+        JMenuItem findDuplicatesItem = new JMenuItem("Find All Duplicates");
+        findDuplicatesItem.addActionListener(e -> startDuplicateScan());
+        toolsMenu.add(findDuplicatesItem);
+
+        JMenuItem normalViewItem = new JMenuItem("Back to Normal View");
+        normalViewItem.addActionListener(e -> switchToNormalView());
+        toolsMenu.add(normalViewItem);
+
         return menuBar;
+    }
+
+    private void switchToNormalView() {
+        if (!isDuplicateViewMode) return;
+        isDuplicateViewMode = false;
+        prepareForNewTask();
+        topSplit.setLeftComponent(treeScroll);
+        topSplit.setDividerLocation(250);
+        displayImages(model.getCurrentDirectory());
+    }
+
+    private void startDuplicateScan() {
+        isDuplicateViewMode = true;
+        prepareForNewTask();
+        duplicateListPanel.removeAll();
+        duplicateListPanel.revalidate();
+        duplicateListPanel.repaint();
+
+        JSplitPane leftSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, treeScroll, duplicateListScroll);
+        leftSplit.setDividerLocation(200);
+        leftSplit.setResizeWeight(0.5);
+
+        topSplit.setLeftComponent(leftSplit);
+        topSplit.setDividerLocation(450); // Adjust to accommodate both panels
+
+        DuplicateScanner scanner = new DuplicateScanner(this, pHashCacheManager);
+        currentWorker = scanner;
+        scanner.execute();
+    }
+
+    public void addDuplicateSet(File representative, List<File> group) {
+        try {
+            ImageIcon icon = createDisplayIcon(representative, 100, 100);
+            JLabel label = new JLabel(icon);
+            label.setToolTipText("Group of " + group.size() + " duplicates");
+            label.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            label.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    showDuplicateGroup(group);
+                    // Highlight selected group
+                    for (Component c : duplicateListPanel.getComponents()) {
+                        if (c instanceof JLabel) {
+                            ((JLabel) c).setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+                        }
+                    }
+                    label.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+                }
+            });
+            duplicateListPanel.add(label);
+            duplicateListPanel.revalidate();
+            duplicateListPanel.repaint();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void showDuplicateGroup(List<File> group) {
+        imagePanelManager.clearImagePanel();
+        clearSelectionUI();
+        for (File file : group) {
+            try {
+                JLabel label = createImageLabel(file, imagePanelManager.getThumbnailSize());
+                if (label != null) {
+                    imagePanelManager.addImageLabel(label);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        imagePanelManager.getImagePanel().revalidate();
+        imagePanelManager.getImagePanel().repaint();
+        statusPanelManager.updateTotalFiles(group.size());
+    }
+
+    public void duplicateScanComplete(Map<File, List<File>> result) {
+        setSearchStatus("Duplicate scan complete. Found " + result.size() + " groups.");
     }
 
     private void selectByKeywords() {

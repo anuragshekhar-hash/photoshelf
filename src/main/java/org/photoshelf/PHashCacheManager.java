@@ -76,4 +76,12 @@ public class PHashCacheManager {
     public Set<String> getAllFilePaths() {
         return cache.keySet();
     }
+
+    public Map<String, String> getAllHashes() {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, CacheEntry> entry : cache.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().hash);
+        }
+        return result;
+    }
 }
