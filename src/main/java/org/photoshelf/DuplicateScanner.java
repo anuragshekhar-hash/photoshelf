@@ -21,7 +21,17 @@ public class DuplicateScanner extends SwingWorker<Map<File, List<File>>, File> {
     @Override
     protected Map<File, List<File>> doInBackground() throws Exception {
         Map<String, String> allHashes = pHashCacheManager.getAllHashes();
-        List<Map.Entry<String, String>> hashEntries = new ArrayList<>(allHashes.entrySet());
+        List<Map.Entry<String, String>> hashEntries = new ArrayList<>();
+
+        // Filter out hidden files/directories from the cache entries
+        for (Map.Entry<String, String> entry : allHashes.entrySet()) {
+            String path = entry.getKey();
+            // Check if any part of the path starts with "."
+            if (!hasHiddenComponent(path)) {
+                hashEntries.add(entry);
+            }
+        }
+
         int totalFiles = hashEntries.size();
 
         // Pre-convert hashes to long for faster comparison
@@ -93,6 +103,17 @@ public class DuplicateScanner extends SwingWorker<Map<File, List<File>>, File> {
         }
 
         return duplicateGroups;
+    }
+
+    private boolean hasHiddenComponent(String path) {
+        File file = new File(path);
+        while (file != null) {
+            if (file.getName().startsWith(".")) {
+                return true;
+            }
+            file = file.getParentFile();
+        }
+        return false;
     }
 
     @Override

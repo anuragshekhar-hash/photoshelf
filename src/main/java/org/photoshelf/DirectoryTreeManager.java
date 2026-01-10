@@ -113,7 +113,7 @@ public class DirectoryTreeManager {
         // This must be on the EDT
         SwingUtilities.invokeLater(() -> {
             if (node.getFile().isDirectory()) {
-                File[] files = node.getFile().listFiles(File::isDirectory);
+                File[] files = node.getFile().listFiles(f -> f.isDirectory() && !f.getName().startsWith("."));
                 if (files != null && files.length > 0) {
                     node.add(new DefaultMutableTreeNode("Loading..."));
                 }
@@ -126,7 +126,7 @@ public class DirectoryTreeManager {
             @Override
             protected List<FileTreeNode> doInBackground() {
                 // 1. Perform slow file I/O on the background thread
-                File[] files = node.getFile().listFiles(File::isDirectory);
+                File[] files = node.getFile().listFiles(f -> f.isDirectory() && !f.getName().startsWith("."));
                 List<FileTreeNode> children = new ArrayList<>();
                 if (files != null) {
                     Arrays.sort(files, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));

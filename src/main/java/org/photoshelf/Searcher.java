@@ -36,7 +36,7 @@ public class Searcher extends SwingWorker<Void, JLabel> {
         Files.walkFileTree(searchRoot.toPath(), EnumSet.noneOf(FileVisitOption.class), maxDepth, new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                if (Files.isHidden(dir)) {
+                if (Files.isHidden(dir) || dir.getFileName().toString().startsWith(".")) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 return FileVisitResult.CONTINUE;

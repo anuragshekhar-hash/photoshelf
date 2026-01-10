@@ -46,7 +46,10 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
         try (Stream<Path> stream = Files.list(directory.toPath())) {
             filesToDisplay = stream
                     .filter(path -> {
-                        String lower = path.getFileName().toString().toLowerCase();
+                        String fileName = path.getFileName().toString();
+                        if (fileName.startsWith(".")) return false; // Skip hidden files/directories
+
+                        String lower = fileName.toLowerCase();
                         if (lower.lastIndexOf('.') == -1) return false;
                         String extension = lower.substring(lower.lastIndexOf('.') + 1);
                         return SUPPORTED_EXTENSIONS.contains(extension) && (filterText.isEmpty() || lower.contains(filterText));
