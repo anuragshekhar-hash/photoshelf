@@ -12,6 +12,7 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -26,8 +27,10 @@ public class PreviewPanelManager {
     private final JPanel keywordGridPanel;
     private final KeywordManager keywordManager;
     private File currentFile;
+    private final PhotoShelfUI mainApp;
 
-    public PreviewPanelManager(KeywordManager keywordManager) {
+    public PreviewPanelManager(PhotoShelfUI mainApp, KeywordManager keywordManager) {
+        this.mainApp = mainApp;
         this.keywordManager = keywordManager;
 
         previewLabel = new JLabel("Select an image to preview", JLabel.CENTER);
@@ -68,10 +71,15 @@ public class PreviewPanelManager {
         keywordScroll.setBorder(BorderFactory.createTitledBorder("Keywords"));
         keywordScroll.getViewport().setBackground(Color.WHITE);
 
+        JButton searchButton = new JButton("Search");
+        searchButton.setToolTipText("Find images with selected keywords");
+        searchButton.addActionListener(e -> searchSelectedKeywords());
+
         JButton addKeywordButton = new JButton("Add");
         addKeywordButton.addActionListener(e -> addKeyword());
 
         JPanel keywordButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        keywordButtonPanel.add(searchButton);
         keywordButtonPanel.add(addKeywordButton);
 
         JPanel keywordPanel = new JPanel(new BorderLayout());
@@ -167,7 +175,9 @@ public class PreviewPanelManager {
         Border emptyBorder = BorderFactory.createEmptyBorder(2, 5, 2, 5);
         panel.setBorder(BorderFactory.createCompoundBorder(matteBorder, emptyBorder));
 
-        JLabel label = new JLabel(keyword);
+        JCheckBox checkBox = new JCheckBox(keyword);
+        checkBox.setBackground(Color.WHITE);
+        // Removed immediate search listener to allow multiple selection
 
         JButton editButton = createStyledButton("\u270E"); // Pencil icon
         editButton.setToolTipText("Rename keyword");
@@ -185,9 +195,41 @@ public class PreviewPanelManager {
         buttonsPanel.add(editButton);
         buttonsPanel.add(removeButton);
 
-        panel.add(label, BorderLayout.CENTER);
+        panel.add(checkBox, BorderLayout.CENTER);
         panel.add(buttonsPanel, BorderLayout.EAST);
         return panel;
+    }
+
+    private void searchSelectedKeywords() {
+        List<String> selectedKeywords = new ArrayList<>();
+        for (Component comp : keywordGridPanel.getComponents()) {
+            if (comp instanceof JPanel) {
+                JPanel panel = (JPanel) comp;
+                for (Component innerComp : panel.getComponents()) {
+                    if (innerComp instanceof JCheckBox) {
+                        JCheckBox checkBox = (JCheckBox) innerComp;
+                        if (checkBox.isSelected()) {
+                            selectedKeywords.add(checkBox.getText());
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!selectedKeywords.isEmpty()) {
+            SearchParams params = new SearchParams();
+            StringBuilder sb = new StringBuilder();
+            for (String kw : selectedKeywords) {
+                if (sb.length() > 0) sb.append(" & ");
+                sb.append(kw);
+            }
+            params.setExpression(sb.toString());
+            params.setRecursive(true);
+            mainApp.executeSearch(params, false);
+        } else {
+            JOptionPane.showMessageDialog(mainPanel, "Please select at least one keyword to search.", "No Keywords Selected", JOptionPane.INFORMATION_MESSAGE);
+        }
     }
 
     private JButton createStyledButton(String text) {

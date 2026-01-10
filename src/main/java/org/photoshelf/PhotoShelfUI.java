@@ -47,7 +47,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         directoryTreeManager = new DirectoryTreeManager(this);
         imagePanelManager = new ImagePanelManager(this);
         toolbarManager = new ToolbarManager(this);
-        previewPanelManager = new PreviewPanelManager(keywordManager);
+        previewPanelManager = new PreviewPanelManager(this, keywordManager);
         statusPanelManager = new StatusPanelManager();
         thumbnailCache = new HybridCache<>("thumbnails", 200);
         pHashCacheManager = new PHashCacheManager();
