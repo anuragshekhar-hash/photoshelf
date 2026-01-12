@@ -158,31 +158,54 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     }
 
     public void addDuplicateSet(File representative, List<File> group) {
-        try {
-            ImageIcon icon = createDisplayIcon(representative, 100, 100);
-            JLabel label = new JLabel(icon);
-            label.setToolTipText("Group of " + group.size() + " duplicates");
-            label.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-            label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            label.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    showDuplicateGroup(group);
-                    // Highlight selected group
-                    for (Component c : duplicateListPanel.getComponents()) {
-                        if (c instanceof JLabel) {
-                            ((JLabel) c).setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-                        }
+        // Create a placeholder label immediately so the UI updates fast
+        JLabel label = new JLabel("Loading...", SwingConstants.CENTER);
+        label.setPreferredSize(new Dimension(110, 110)); // Slightly larger than thumbnail
+        label.setToolTipText("Group of " + group.size() + " duplicates");
+        label.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        
+        label.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                showDuplicateGroup(group);
+                // Highlight selected group
+                for (Component c : duplicateListPanel.getComponents()) {
+                    if (c instanceof JLabel) {
+                        ((JLabel) c).setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
                     }
-                    label.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
                 }
-            });
-            duplicateListPanel.add(label);
-            duplicateListPanel.revalidate();
-            duplicateListPanel.repaint();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+                label.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+            }
+        });
+
+        duplicateListPanel.add(label);
+        duplicateListPanel.revalidate();
+        duplicateListPanel.repaint();
+
+        // Load the image in the background
+        new SwingWorker<ImageIcon, Void>() {
+            @Override
+            protected ImageIcon doInBackground() throws Exception {
+                return createDisplayIcon(representative, 100, 100);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    ImageIcon icon = get();
+                    if (icon != null) {
+                        label.setIcon(icon);
+                        label.setText(null); // Remove "Loading..." text
+                        label.revalidate();
+                        label.repaint();
+                    }
+                } catch (Exception e) {
+                    label.setText("Error");
+                    e.printStackTrace();
+                }
+            }
+        }.execute();
     }
 
     private void showDuplicateGroup(List<File> group) {
