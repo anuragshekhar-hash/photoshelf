@@ -38,6 +38,8 @@ public class PreviewPanelManager {
         previewLabel.setVerticalAlignment(JLabel.CENTER);
         previewScroll = new JScrollPane(previewLabel);
         previewScroll.setPreferredSize(new Dimension(400, 300));
+        previewScroll.setBorder(BorderFactory.createEmptyBorder());
+        previewScroll.getViewport().setBackground(UIManager.getColor("Panel.background"));
 
         previewScroll.addMouseWheelListener(new MouseWheelListener() {
             @Override
@@ -60,16 +62,13 @@ public class PreviewPanelManager {
         });
 
         keywordGridPanel = new JPanel(new GridLayout(0, 1, 0, 2));
-        keywordGridPanel.setBackground(Color.WHITE);
 
         // Wrapper panel to prevent grid from stretching
         JPanel keywordGridWrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        keywordGridWrapper.setBackground(Color.WHITE);
         keywordGridWrapper.add(keywordGridPanel);
 
         JScrollPane keywordScroll = new JScrollPane(keywordGridWrapper);
         keywordScroll.setBorder(BorderFactory.createTitledBorder("Keywords"));
-        keywordScroll.getViewport().setBackground(Color.WHITE);
 
         JButton searchButton = new JButton("Search");
         searchButton.setToolTipText("Find images with selected keywords");
@@ -152,7 +151,6 @@ public class PreviewPanelManager {
             Set<String> keywords = keywordManager.getKeywords(currentFile);
             if (keywords.isEmpty()) {
                 JPanel emptyPanel = new JPanel();
-                emptyPanel.setBackground(Color.WHITE);
                 JLabel noKeywordsLabel = new JLabel("No keywords added.");
                 noKeywordsLabel.setHorizontalAlignment(SwingConstants.CENTER);
                 noKeywordsLabel.setForeground(Color.GRAY);
@@ -170,13 +168,11 @@ public class PreviewPanelManager {
 
     private JComponent createKeywordComponent(String keyword) {
         JPanel panel = new JPanel(new BorderLayout(5, 0));
-        panel.setBackground(Color.WHITE);
-        Border matteBorder = BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 220, 220));
+        Border matteBorder = BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Separator.foreground"));
         Border emptyBorder = BorderFactory.createEmptyBorder(2, 5, 2, 5);
         panel.setBorder(BorderFactory.createCompoundBorder(matteBorder, emptyBorder));
 
         JCheckBox checkBox = new JCheckBox(keyword);
-        checkBox.setBackground(Color.WHITE);
         // Removed immediate search listener to allow multiple selection
 
         JButton editButton = createStyledButton("\u270E"); // Pencil icon
@@ -191,7 +187,6 @@ public class PreviewPanelManager {
         });
 
         JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        buttonsPanel.setBackground(Color.WHITE);
         buttonsPanel.add(editButton);
         buttonsPanel.add(removeButton);
 
@@ -242,7 +237,7 @@ public class PreviewPanelManager {
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent evt) {
-                button.setForeground(Color.BLACK);
+                button.setForeground(UIManager.getColor("Label.foreground"));
             }
             public void mouseExited(MouseEvent evt) {
                 button.setForeground(Color.GRAY);

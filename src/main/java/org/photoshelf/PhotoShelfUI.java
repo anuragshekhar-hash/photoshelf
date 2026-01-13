@@ -52,6 +52,15 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         model = new PhotoShelfModel(keywordManager);
         directoryTreeManager = new DirectoryTreeManager(this);
         imagePanelManager = new ImagePanelManager(this);
+        // Ensure the image panel and its viewport match the Dark Mode theme
+        imagePanelManager.getImagePanel().setBackground(UIManager.getColor("Panel.background"));
+        
+        // Fix: getPanel() returns a JPanel (containerPanel), not a JScrollPane directly.
+        // We need to find the scroll pane inside it if we want to set the viewport background,
+        // but typically setting the panel background is enough or we can access it via a getter if added.
+        // For now, let's just set the container background.
+        imagePanelManager.getPanel().setBackground(UIManager.getColor("Panel.background"));
+
         toolbarManager = new ToolbarManager(this);
         previewPanelManager = new PreviewPanelManager(this, keywordManager);
         statusPanelManager = new StatusPanelManager();
@@ -175,7 +184,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
                         ((JLabel) c).setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
                     }
                 }
-                label.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+                label.setBorder(BorderFactory.createLineBorder(UIManager.getColor("Component.focusedBorderColor"), 2));
             }
         });
 
@@ -491,7 +500,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
     public void addToSelectionUI(JLabel label) {
         model.addToSelection(label);
-        label.setBorder(BorderFactory.createLineBorder(SystemColor.controlDkShadow, 2));
+        label.setBorder(BorderFactory.createLineBorder(UIManager.getColor("Component.focusedBorderColor"), 2));
         updateSelectionStatus();
     }
 
@@ -505,7 +514,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             }
         } else {
             model.addToSelection(label);
-            label.setBorder(BorderFactory.createLineBorder(SystemColor.controlDkShadow, 2));
+            label.setBorder(BorderFactory.createLineBorder(UIManager.getColor("Component.focusedBorderColor"), 2));
         }
         updateSelectionStatus();
     }
