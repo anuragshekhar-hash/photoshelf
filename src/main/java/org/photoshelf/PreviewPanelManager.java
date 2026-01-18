@@ -17,9 +17,9 @@ import java.util.List;
 import java.util.Set;
 
 public class PreviewPanelManager {
-    private final JLabel previewLabel;
+    private final JPanel previewCanvas; // Changed from JLabel to JPanel for custom painting
     private final JScrollPane previewScroll;
-    private BufferedImage originalImage;
+    private Image currentImage; // Changed from BufferedImage to Image to support Toolkit images (GIFs)
     private double scale = 1.0;
     private static final double MIN_SCALE = 0.1;
     private static final double MAX_SCALE = 5.0;
@@ -33,10 +33,42 @@ public class PreviewPanelManager {
         this.mainApp = mainApp;
         this.keywordManager = keywordManager;
 
-        previewLabel = new JLabel("Select an image to preview", JLabel.CENTER);
-        previewLabel.setHorizontalAlignment(JLabel.CENTER);
-        previewLabel.setVerticalAlignment(JLabel.CENTER);
-        previewScroll = new JScrollPane(previewLabel);
+        // Custom panel to paint the image scaled while preserving animation
+        previewCanvas = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (currentImage != null) {
+                    int panelWidth = getWidth();
+                    int panelHeight = getHeight();
+                    int imgWidth = currentImage.getWidth(this);
+                    int imgHeight = currentImage.getHeight(this);
+
+                    if (imgWidth > 0 && imgHeight > 0) {
+                        // Calculate scaled dimensions
+                        int newW = (int) (imgWidth * scale);
+                        int newH = (int) (imgHeight * scale);
+
+                        // Center the image
+                        int x = (panelWidth - newW) / 2;
+                        int y = (panelHeight - newH) / 2;
+
+                        // Draw the image scaled. Passing 'this' as observer enables animation for GIFs.
+                        g.drawImage(currentImage, x, y, newW, newH, this);
+                    }
+                } else {
+                    // Draw placeholder text if no image
+                    String text = (currentFile == null) ? "Select an image to preview" : "Cannot preview this file";
+                    FontMetrics fm = g.getFontMetrics();
+                    int x = (getWidth() - fm.stringWidth(text)) / 2;
+                    int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
+                    g.drawString(text, x, y);
+                }
+            }
+        };
+        previewCanvas.setBackground(UIManager.getColor("Panel.background"));
+        
+        previewScroll = new JScrollPane(previewCanvas);
         previewScroll.setPreferredSize(new Dimension(400, 300));
         previewScroll.setBorder(BorderFactory.createEmptyBorder());
         previewScroll.getViewport().setBackground(UIManager.getColor("Panel.background"));
@@ -45,7 +77,7 @@ public class PreviewPanelManager {
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
                 if (e.isControlDown()) {
-                    if (originalImage == null) return; // Don't zoom if no image or if it's a GIF
+                    if (currentImage == null) return;
 
                     int rotation = e.getWheelRotation();
                     if (rotation < 0) { // Zoom in
@@ -55,8 +87,9 @@ public class PreviewPanelManager {
                         scale /= 1.1;
                         if (scale < MIN_SCALE) scale = MIN_SCALE;
                     }
-                    updatePreview();
-                    e.consume(); // Prevent the scroll pane from scrolling
+                    previewCanvas.revalidate();
+                    previewCanvas.repaint();
+                    e.consume();
                 }
             }
         });
@@ -96,53 +129,50 @@ public class PreviewPanelManager {
     public void showImagePreview(File imgFile) {
         this.currentFile = imgFile;
         try {
-            scale = 1;
+            scale = 1.0; // Reset scale for new image
             if (imgFile.getName().toLowerCase().endsWith(".gif")) {
-                this.originalImage = null;
-                previewLabel.setIcon(new ImageIcon(imgFile.getAbsolutePath()));
-                previewLabel.setText("");
-            } else {
-                this.originalImage = ImageIO.read(imgFile);
-                if (this.originalImage == null) {
-                    previewLabel.setIcon(null);
-                    previewLabel.setText("Cannot preview this file");
-                    return;
+                // Load GIF using Toolkit to preserve animation frames
+                this.currentImage = Toolkit.getDefaultToolkit().createImage(imgFile.getAbsolutePath());
+                
+                // Wait for image to load to get dimensions (needed for initial scaling)
+                MediaTracker tracker = new MediaTracker(previewCanvas);
+                tracker.addImage(this.currentImage, 0);
+                try {
+                    tracker.waitForID(0);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-                updatePreview();
+            } else {
+                this.currentImage = ImageIO.read(imgFile);
             }
+            
+            if (this.currentImage != null) {
+                calculateInitialScale();
+            }
+            
+            previewCanvas.revalidate();
+            previewCanvas.repaint();
             updateKeywordGrid();
         } catch (Exception ex) {
-            this.originalImage = null;
-            previewLabel.setIcon(null);
-            previewLabel.setText("Could not open image");
+            this.currentImage = null;
+            previewCanvas.repaint();
             ex.printStackTrace();
         }
     }
 
-    private void updatePreview() {
-        if (originalImage == null) return;
+    private void calculateInitialScale() {
+        if (currentImage == null) return;
 
         int maxW = previewScroll.getViewport().getWidth();
         int maxH = previewScroll.getViewport().getHeight();
-        int imgW = originalImage.getWidth();
-        int imgH = originalImage.getHeight();
+        int imgW = currentImage.getWidth(previewCanvas);
+        int imgH = currentImage.getHeight(previewCanvas);
 
-        if (scale == 1.0 && (imgW > maxW || imgH > maxH)) {
+        if (imgW > 0 && imgH > 0 && (imgW > maxW || imgH > maxH)) {
             scale = Math.min((double) maxW / imgW, (double) maxH / imgH);
+        } else {
+            scale = 1.0;
         }
-
-        int newW = (int) (imgW * scale);
-        int newH = (int) (imgH * scale);
-
-        BufferedImage scaledImage = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = scaledImage.createGraphics();
-        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g2d.drawImage(originalImage, 0, 0, newW, newH, null);
-        g2d.dispose();
-
-        previewLabel.setIcon(new ImageIcon(scaledImage));
-        previewLabel.setText("");
-        previewLabel.revalidate();
     }
 
     private void updateKeywordGrid() {
