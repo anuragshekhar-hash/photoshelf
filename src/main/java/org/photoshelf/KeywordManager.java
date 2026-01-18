@@ -1,160 +1,180 @@
 package org.photoshelf;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.io.File;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class KeywordManager {
-    private final Map<String, Set<String>> keywordMap;
-    private final Path storagePath;
-    private final Path tempPath;
-    private final Path backupPath;
+    private final DatabaseManager dbManager;
 
     public KeywordManager() {
-        Path baseDir = Path.of(System.getProperty("user.home"), ".photoshelf_cache");
-        try {
-            Files.createDirectories(baseDir);
-        } catch (IOException e) {
-            System.err.println("Could not create cache directory: " + e.getMessage());
-        }
-        this.storagePath = baseDir.resolve("keywords.ser");
-        this.tempPath = baseDir.resolve("keywords.ser.tmp");
-        this.backupPath = baseDir.resolve("keywords.ser.bak");
-        this.keywordMap = loadKeywords();
+        this.dbManager = new DatabaseManager();
+        // Trigger migration if needed
+        dbManager.migrateFromLegacyCache();
     }
 
     public void addKeyword(File imageFile, String keyword) {
-        String path = imageFile.getAbsolutePath();
-        keywordMap.computeIfAbsent(path, k -> new HashSet<>()).add(keyword.toLowerCase());
-        saveKeywords();
+        String sql = "MERGE INTO keywords (file_path, keyword) KEY(file_path, keyword) VALUES (?, ?)";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, imageFile.getAbsolutePath());
+            pstmt.setString(2, keyword.toLowerCase());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public void removeKeyword(File imageFile, String keyword) {
-        String path = imageFile.getAbsolutePath();
-        if (keywordMap.containsKey(path)) {
-            keywordMap.get(path).remove(keyword.toLowerCase());
-            if (keywordMap.get(path).isEmpty()) {
-                keywordMap.remove(path);
-            }
-            saveKeywords();
+        String sql = "DELETE FROM keywords WHERE file_path = ? AND keyword = ?";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, imageFile.getAbsolutePath());
+            pstmt.setString(2, keyword.toLowerCase());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
     public void renameKeyword(String oldKeyword, String newKeyword) {
-        String oldKeywordLower = oldKeyword.toLowerCase();
-        String newKeywordLower = newKeyword.toLowerCase();
-        for (Set<String> keywords : keywordMap.values()) {
-            if (keywords.contains(oldKeywordLower)) {
-                keywords.remove(oldKeywordLower);
-                keywords.add(newKeywordLower);
-            }
+        String sql = "UPDATE keywords SET keyword = ? WHERE keyword = ?";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newKeyword.toLowerCase());
+            pstmt.setString(2, oldKeyword.toLowerCase());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        saveKeywords();
     }
 
     public Set<String> getKeywords(File imageFile) {
-        return keywordMap.getOrDefault(imageFile.getAbsolutePath(), Collections.emptySet());
+        Set<String> keywords = new HashSet<>();
+        String sql = "SELECT keyword FROM keywords WHERE file_path = ?";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, imageFile.getAbsolutePath());
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    keywords.add(rs.getString("keyword"));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return keywords;
     }
 
     public boolean hasKeyword(File imageFile, String keyword) {
-        return getKeywords(imageFile).contains(keyword.toLowerCase());
+        String sql = "SELECT 1 FROM keywords WHERE file_path = ? AND keyword = ? LIMIT 1";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, imageFile.getAbsolutePath());
+            pstmt.setString(2, keyword.toLowerCase());
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 
     public void renameFile(File oldFile, File newFile) {
-        String oldPath = oldFile.getAbsolutePath();
-        if (keywordMap.containsKey(oldPath)) {
-            Set<String> keywords = keywordMap.remove(oldPath);
-            keywordMap.put(newFile.getAbsolutePath(), keywords);
-            saveKeywords();
+        String sql = "UPDATE keywords SET file_path = ? WHERE file_path = ?";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, newFile.getAbsolutePath());
+            pstmt.setString(2, oldFile.getAbsolutePath());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
     public void deleteFile(File file) {
-        if (keywordMap.remove(file.getAbsolutePath()) != null) {
-            saveKeywords();
+        String sql = "DELETE FROM keywords WHERE file_path = ?";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, file.getAbsolutePath());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
     public void copyKeywords(File source, File destination) {
-        String sourcePath = source.getAbsolutePath();
-        if (keywordMap.containsKey(sourcePath)) {
-            Set<String> keywordsToCopy = new HashSet<>(keywordMap.get(sourcePath));
-            String destPath = destination.getAbsolutePath();
-            keywordMap.computeIfAbsent(destPath, k -> new HashSet<>()).addAll(keywordsToCopy);
-            saveKeywords();
+        Set<String> keywords = getKeywords(source);
+        if (!keywords.isEmpty()) {
+            addKeywords(destination, new ArrayList<>(keywords));
         }
     }
 
     public Set<String> getAllKeywords() {
-        return keywordMap.values().stream()
-                .flatMap(Set::stream)
-                .collect(Collectors.toSet());
+        Set<String> keywords = new HashSet<>();
+        String sql = "SELECT DISTINCT keyword FROM keywords";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                keywords.add(rs.getString("keyword"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return keywords;
     }
 
     public int cleanup() {
         int removedCount = 0;
-        var iterator = keywordMap.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            String path = entry.getKey();
-            if (!Files.exists(Path.of(path))) {
-                iterator.remove();
-                removedCount++;
+        String selectSql = "SELECT DISTINCT file_path FROM keywords";
+        String deleteSql = "DELETE FROM keywords WHERE file_path = ?";
+        
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement selectStmt = conn.prepareStatement(selectSql);
+             PreparedStatement deleteStmt = conn.prepareStatement(deleteSql);
+             ResultSet rs = selectStmt.executeQuery()) {
+            
+            while (rs.next()) {
+                String path = rs.getString("file_path");
+                if (!new File(path).exists()) {
+                    deleteStmt.setString(1, path);
+                    deleteStmt.addBatch();
+                    removedCount++;
+                }
             }
-        }
-
-        if (removedCount > 0) {
-            saveKeywords();
+            if (removedCount > 0) {
+                deleteStmt.executeBatch();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return removedCount;
     }
 
     public void shutdown() {
-        // No-op, added for symmetry with other managers that have background threads.
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Set<String>> loadKeywords() {
-        if (Files.exists(storagePath)) {
-            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(storagePath.toFile()))) {
-                return (Map<String, Set<String>>) ois.readObject();
-            } catch (IOException | ClassNotFoundException e) {
-                System.err.println("Error loading keywords from main file: " + e.getMessage() + ". Attempting to load from backup.");
-                if (Files.exists(backupPath)) {
-                    try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(backupPath.toFile()))) {
-                        return (Map<String, Set<String>>) ois.readObject();
-                    } catch (IOException | ClassNotFoundException backupEx) {
-                        System.err.println("Error loading keywords from backup file: " + backupEx.getMessage());
-                    }
-                }
-            }
-        }
-        return new HashMap<>();
-    }
-
-    private void saveKeywords() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(tempPath.toFile()))) {
-            oos.writeObject(keywordMap);
-        } catch (IOException e) {
-            System.err.println("Error writing keywords to temporary file: " + e.getMessage());
-            return; // Abort save
-        }
-
-        try {
-            if (Files.exists(storagePath)) {
-                Files.copy(storagePath, backupPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-            Files.move(tempPath, storagePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
-            System.err.println("Error saving keywords: " + e.getMessage());
-        }
+        dbManager.close();
     }
 
     public void addKeywords(File newFile, ArrayList<String> strings) {
-        for(String s : strings)
-        addKeyword(newFile, s);
+        String sql = "MERGE INTO keywords (file_path, keyword) KEY(file_path, keyword) VALUES (?, ?)";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            conn.setAutoCommit(false);
+            for (String s : strings) {
+                pstmt.setString(1, newFile.getAbsolutePath());
+                pstmt.setString(2, s.toLowerCase());
+                pstmt.addBatch();
+            }
+            pstmt.executeBatch();
+            conn.commit();
+            conn.setAutoCommit(true);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 }

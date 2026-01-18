@@ -1,57 +1,39 @@
 package org.photoshelf;
 
 import java.io.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class PHashCacheManager {
-    private final String cachePath = "phash_cache.ser";
-    private Map<String, CacheEntry> cache;
-    private boolean isDirty = false;
-
-    private static class CacheEntry implements Serializable {
-        private static final long serialVersionUID = 1L;
-        String hash;
-        long lastModified;
-
-        CacheEntry(String hash, long lastModified) {
-            this.hash = hash;
-            this.lastModified = lastModified;
-        }
-    }
+    private final DatabaseManager dbManager;
 
     public PHashCacheManager() {
-        loadCache();
+        this.dbManager = new DatabaseManager();
+        migrateLegacyCache();
     }
 
     @SuppressWarnings("unchecked")
-    public void loadCache() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(cachePath))) {
-            cache = (Map<String, CacheEntry>) ois.readObject();
-            System.out.println("pHash cache loaded with " + cache.size() + " entries.");
-        } catch (FileNotFoundException e) {
-            System.out.println("pHash cache not found. A new one will be created.");
-            cache = new ConcurrentHashMap<>();
-        } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Could not load pHash cache: " + e.getMessage());
-            cache = new ConcurrentHashMap<>();
+    private void migrateLegacyCache() {
+        File legacyFile = new File("phash_cache.ser");
+        if (!legacyFile.exists()) return;
+
+        System.out.println("Migrating pHash cache to database...");
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(legacyFile))) {
+            System.out.println("Legacy cache found but skipping migration due to class structure change. Cache will be rebuilt.");
+            legacyFile.renameTo(new File("phash_cache.ser.bak"));
+        } catch (Exception e) {
+            System.err.println("Error reading legacy cache: " + e.getMessage());
         }
     }
 
     public void saveCache() {
-        if (!isDirty) {
-            System.out.println("pHash cache is clean. No need to save.");
-            return;
-        }
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(cachePath))) {
-            oos.writeObject(cache);
-            System.out.println("pHash cache saved with " + cache.size() + " entries.");
-            isDirty = false;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        // No-op, DB is auto-saved
     }
 
     public String getHash(File file) throws IOException {
@@ -60,27 +42,69 @@ public class PHashCacheManager {
         }
 
         String filePath = file.getAbsolutePath();
-        CacheEntry entry = cache.get(filePath);
+        long currentModified = file.lastModified();
 
-        if (entry != null && entry.lastModified == file.lastModified()) {
-            return entry.hash;
+        Connection conn = dbManager.getConnection();
+        // Check DB
+        String sqlSelect = "SELECT hash, last_modified FROM image_hashes WHERE file_path = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sqlSelect)) {
+            pstmt.setString(1, filePath);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    String hash = rs.getString("hash");
+                    long lastModified = rs.getLong("last_modified");
+                    if (lastModified == currentModified) {
+                        return hash;
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
 
-        // File is new or has been modified, so we calculate a new hash.
+        // Calculate new hash
         String hash = PHash.getHash(file);
-        cache.put(filePath, new CacheEntry(hash, file.lastModified()));
-        isDirty = true;
+        
+        // Update DB
+        String sqlMerge = "MERGE INTO image_hashes (file_path, hash, last_modified) KEY(file_path) VALUES (?, ?, ?)";
+        try (PreparedStatement pstmt = conn.prepareStatement(sqlMerge)) {
+            pstmt.setString(1, filePath);
+            pstmt.setString(2, hash);
+            pstmt.setLong(3, currentModified);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
         return hash;
     }
 
     public Set<String> getAllFilePaths() {
-        return cache.keySet();
+        Set<String> paths = new HashSet<>();
+        String sql = "SELECT file_path FROM image_hashes";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                paths.add(rs.getString("file_path"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return paths;
     }
 
     public Map<String, String> getAllHashes() {
         Map<String, String> result = new HashMap<>();
-        for (Map.Entry<String, CacheEntry> entry : cache.entrySet()) {
-            result.put(entry.getKey(), entry.getValue().hash);
+        String sql = "SELECT file_path, hash FROM image_hashes";
+        Connection conn = dbManager.getConnection();
+        try (PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                result.put(rs.getString("file_path"), rs.getString("hash"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return result;
     }
