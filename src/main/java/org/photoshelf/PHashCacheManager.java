@@ -14,7 +14,7 @@ public class PHashCacheManager {
     private final DatabaseManager dbManager;
 
     public PHashCacheManager() {
-        this.dbManager = new DatabaseManager();
+        this.dbManager = DatabaseManager.getInstance();
         migrateLegacyCache();
     }
 
@@ -45,6 +45,8 @@ public class PHashCacheManager {
         long currentModified = file.lastModified();
 
         Connection conn = dbManager.getConnection();
+        if (conn == null) return null;
+
         // Check DB
         String sqlSelect = "SELECT hash, last_modified FROM image_hashes WHERE file_path = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sqlSelect)) {
@@ -83,6 +85,7 @@ public class PHashCacheManager {
         Set<String> paths = new HashSet<>();
         String sql = "SELECT file_path FROM image_hashes";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return paths;
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
@@ -98,6 +101,7 @@ public class PHashCacheManager {
         Map<String, String> result = new HashMap<>();
         String sql = "SELECT file_path, hash FROM image_hashes";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return result;
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {

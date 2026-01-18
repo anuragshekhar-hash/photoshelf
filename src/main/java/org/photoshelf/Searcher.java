@@ -8,10 +8,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Arrays;
-import java.util.EnumSet;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Searcher extends SwingWorker<Void, JLabel> {
@@ -21,17 +19,22 @@ public class Searcher extends SwingWorker<Void, JLabel> {
     private final AtomicInteger filesFound = new AtomicInteger(0);
     private final SearchParams searchParam;
     private final String Filter;
+    private final String sortCriteria;
+    private final boolean descending;
 
-    public Searcher(PhotoShelfUI mainAppm, File searchRoot, SearchParams params, String filter) {
+    public Searcher(PhotoShelfUI mainAppm, File searchRoot, SearchParams params, String filter, String sortCriteria, boolean descending) {
         this.Filter = filter;
         this.mainApp = mainAppm;
         this.searchRoot = searchRoot;
         this.searchParam = params;
+        this.sortCriteria = sortCriteria;
+        this.descending = descending;
     }
 
     @Override
     protected Void doInBackground() throws IOException {
         int maxDepth = searchParam.isRecursive() ? Integer.MAX_VALUE : 1;
+        List<File> foundFiles = new ArrayList<>();
 
         Files.walkFileTree(searchRoot.toPath(), EnumSet.noneOf(FileVisitOption.class), maxDepth, new SimpleFileVisitor<Path>() {
             @Override
@@ -72,8 +75,7 @@ public class Searcher extends SwingWorker<Void, JLabel> {
                 }
 
                 if (matches) {
-                    filesFound.incrementAndGet();
-                    publish(createImageLabel(file));
+                    foundFiles.add(file);
                 }
                 return FileVisitResult.CONTINUE;
             }
@@ -84,6 +86,38 @@ public class Searcher extends SwingWorker<Void, JLabel> {
                 return FileVisitResult.CONTINUE;
             }
         });
+
+        if (isCancelled()) return null;
+
+        // Sort the collected files
+        Comparator<File> comparator = switch (sortCriteria) {
+            case "Date Created" -> Comparator.comparing(file -> {
+                try {
+                    return Files.readAttributes(file.toPath(), BasicFileAttributes.class).creationTime();
+                } catch (IOException e) {
+                    return null;
+                }
+            }, Comparator.nullsLast(Comparator.naturalOrder()));
+            case "Size" -> Comparator.comparingLong(File::length);
+            case "Type" -> Comparator.comparing(file -> {
+                String name = file.getName();
+                int lastDot = name.lastIndexOf('.');
+                return (lastDot > 0 && lastDot < name.length() - 1) ? name.substring(lastDot + 1).toLowerCase() : "";
+            });
+            default -> Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER);
+        };
+
+        if (descending) {
+            comparator = comparator.reversed();
+        }
+        foundFiles.sort(comparator);
+
+        // Publish sorted files
+        for (File file : foundFiles) {
+            if (isCancelled()) break;
+            filesFound.incrementAndGet();
+            publish(createImageLabel(file));
+        }
 
         return null;
     }

@@ -25,10 +25,12 @@ public class ToolbarManager {
         filterField.addActionListener(e -> mainApp.displayImages(mainApp.getCurrentDirectory()));
 
         sortComboBox = new JComboBox<>(new String[]{"Name", "Date Created", "Size", "Type"});
-        sortComboBox.addActionListener(e -> mainApp.displayImages(mainApp.getCurrentDirectory()));
+        // Use sortCurrentView for client-side sorting
+        sortComboBox.addActionListener(e -> mainApp.sortCurrentView());
 
         sortDescendingCheckBox = new JCheckBox("Descending", true);
-        sortDescendingCheckBox.addActionListener(e -> mainApp.displayImages(mainApp.getCurrentDirectory()));
+        // Use sortCurrentView for client-side sorting
+        sortDescendingCheckBox.addActionListener(e -> mainApp.sortCurrentView());
 
         showDuplicatesCheckBox = new JCheckBox("Show only duplicates");
         showDuplicatesCheckBox.addActionListener(e -> mainApp.displayImages(mainApp.getCurrentDirectory()));

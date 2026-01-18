@@ -7,6 +7,10 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 public class ImagePanelManager {
     private final SelectionPanel imagePanel;
@@ -135,5 +139,28 @@ public class ImagePanelManager {
 
     public void setThumbnailSize(int thumbnailSize) {
         this.thumbnailSize = thumbnailSize;
+    }
+
+    public void sortImages(Comparator<File> comparator) {
+        List<JLabel> labels = new ArrayList<>();
+        for (Component comp : imagePanel.getComponents()) {
+            if (comp instanceof JLabel) {
+                labels.add((JLabel) comp);
+            }
+        }
+
+        labels.sort((l1, l2) -> {
+            File f1 = (File) l1.getClientProperty("imageFile");
+            File f2 = (File) l2.getClientProperty("imageFile");
+            if (f1 == null || f2 == null) return 0;
+            return comparator.compare(f1, f2);
+        });
+
+        imagePanel.removeAll();
+        for (JLabel label : labels) {
+            imagePanel.add(label);
+        }
+        imagePanel.revalidate();
+        imagePanel.repaint();
     }
 }

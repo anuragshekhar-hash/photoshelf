@@ -13,6 +13,8 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
@@ -52,15 +54,10 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         model = new PhotoShelfModel(keywordManager);
         directoryTreeManager = new DirectoryTreeManager(this);
         imagePanelManager = new ImagePanelManager(this);
-        // Ensure the image panel and its viewport match the Dark Mode theme
+        // Ensure the image panel matches the Dark Mode theme
         imagePanelManager.getImagePanel().setBackground(UIManager.getColor("Panel.background"));
-        
-        // Fix: getPanel() returns a JPanel (containerPanel), not a JScrollPane directly.
-        // We need to find the scroll pane inside it if we want to set the viewport background,
-        // but typically setting the panel background is enough or we can access it via a getter if added.
-        // For now, let's just set the container background.
         imagePanelManager.getPanel().setBackground(UIManager.getColor("Panel.background"));
-
+        
         toolbarManager = new ToolbarManager(this);
         previewPanelManager = new PreviewPanelManager(this, keywordManager);
         statusPanelManager = new StatusPanelManager();
@@ -363,6 +360,34 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         directoryWatcherThread.start();
     }
 
+    public void sortCurrentView() {
+        String sortCriteria = toolbarManager.getSortCriteria();
+        boolean descending = toolbarManager.isSortDescending();
+
+        Comparator<File> comparator = switch (sortCriteria) {
+            case "Date Created" -> Comparator.comparing(file -> {
+                try {
+                    return Files.readAttributes(file.toPath(), BasicFileAttributes.class).creationTime();
+                } catch (IOException e) {
+                    return null;
+                }
+            }, Comparator.nullsLast(Comparator.naturalOrder()));
+            case "Size" -> Comparator.comparingLong(File::length);
+            case "Type" -> Comparator.comparing(file -> {
+                String name = file.getName();
+                int lastDot = name.lastIndexOf('.');
+                return (lastDot > 0 && lastDot < name.length() - 1) ? name.substring(lastDot + 1).toLowerCase() : "";
+            });
+            default -> Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER);
+        };
+
+        if (descending) {
+            comparator = comparator.reversed();
+        }
+
+        imagePanelManager.sortImages(comparator);
+    }
+
     public void executeSearch(SearchParams params, boolean filterCurrentView) {
         if (filterCurrentView) {
             filterImageGrid(params);
@@ -419,7 +444,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         prepareForNewTask();
         setSearchStatus("Searching...");
         String filter = toolbarManager.getFilterText().trim();
-        Searcher searcher = new Searcher(this, getCurrentDirectory(), params, filter);
+        Searcher searcher = new Searcher(this, getCurrentDirectory(), params, filter, toolbarManager.getSortCriteria(), toolbarManager.isSortDescending());
         currentWorker = searcher;
         searcher.execute();
     }

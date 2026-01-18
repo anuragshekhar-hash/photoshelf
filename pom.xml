@@ -35,12 +35,6 @@
             <artifactId>flatlaf</artifactId>
             <version>3.4</version>
         </dependency>
-        <!-- OpenCV dependency for facial recognition -->
-        <dependency>
-            <groupId>org.openpnp</groupId>
-            <artifactId>opencv</artifactId>
-            <version>4.9.0-0</version>
-        </dependency>
         <!-- H2 Database -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -84,61 +78,6 @@
                                     <mainClass>org.photoshelf.Main</mainClass>
                                 </transformer>
                             </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>com.googlecode.maven-download-plugin</groupId>
-                <artifactId>download-maven-plugin</artifactId>
-                <version>1.9.0</version>
-                <executions>
-                    <execution>
-                        <id>download-deploy-prototxt</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>wget</goal>
-                        </goals>
-                        <configuration>
-                            <url>https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt</url>
-                            <outputDirectory>${project.basedir}/src/main/resources/models</outputDirectory>
-                            <overwrite>false</overwrite>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>download-res10-caffemodel</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>wget</goal>
-                        </goals>
-                        <configuration>
-                            <url>https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel</url>
-                            <outputDirectory>${project.basedir}/src/main/resources/models</outputDirectory>
-                            <overwrite>false</overwrite>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>download-openface-model</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>wget</goal>
-                        </goals>
-                        <configuration>
-                            <url>https://github.com/pyannote/pyannote-data/raw/master/openface.nn4.small2.v1.t7</url>
-                            <outputDirectory>${project.basedir}/src/main/resources/models</outputDirectory>
-                            <overwrite>false</overwrite>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>download-haarcascade</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>wget</goal>
-                        </goals>
-                        <configuration>
-                            <url>https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml</url>
-                            <outputDirectory>${project.basedir}/src/main/resources/models</outputDirectory>
-                            <overwrite>false</overwrite>
                         </configuration>
                     </execution>
                 </executions>

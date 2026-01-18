@@ -11,14 +11,15 @@ public class KeywordManager {
     private final DatabaseManager dbManager;
 
     public KeywordManager() {
-        this.dbManager = new DatabaseManager();
-        // Trigger migration if needed
+        this.dbManager = DatabaseManager.getInstance();
+        // Trigger migration if needed (safe to call multiple times as it checks file existence)
         dbManager.migrateFromLegacyCache();
     }
 
     public void addKeyword(File imageFile, String keyword) {
         String sql = "MERGE INTO keywords (file_path, keyword) KEY(file_path, keyword) VALUES (?, ?)";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, imageFile.getAbsolutePath());
             pstmt.setString(2, keyword.toLowerCase());
@@ -31,6 +32,7 @@ public class KeywordManager {
     public void removeKeyword(File imageFile, String keyword) {
         String sql = "DELETE FROM keywords WHERE file_path = ? AND keyword = ?";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, imageFile.getAbsolutePath());
             pstmt.setString(2, keyword.toLowerCase());
@@ -43,6 +45,7 @@ public class KeywordManager {
     public void renameKeyword(String oldKeyword, String newKeyword) {
         String sql = "UPDATE keywords SET keyword = ? WHERE keyword = ?";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, newKeyword.toLowerCase());
             pstmt.setString(2, oldKeyword.toLowerCase());
@@ -56,6 +59,7 @@ public class KeywordManager {
         Set<String> keywords = new HashSet<>();
         String sql = "SELECT keyword FROM keywords WHERE file_path = ?";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return keywords;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, imageFile.getAbsolutePath());
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -72,6 +76,7 @@ public class KeywordManager {
     public boolean hasKeyword(File imageFile, String keyword) {
         String sql = "SELECT 1 FROM keywords WHERE file_path = ? AND keyword = ? LIMIT 1";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return false;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, imageFile.getAbsolutePath());
             pstmt.setString(2, keyword.toLowerCase());
@@ -87,6 +92,7 @@ public class KeywordManager {
     public void renameFile(File oldFile, File newFile) {
         String sql = "UPDATE keywords SET file_path = ? WHERE file_path = ?";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, newFile.getAbsolutePath());
             pstmt.setString(2, oldFile.getAbsolutePath());
@@ -99,6 +105,7 @@ public class KeywordManager {
     public void deleteFile(File file) {
         String sql = "DELETE FROM keywords WHERE file_path = ?";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, file.getAbsolutePath());
             pstmt.executeUpdate();
@@ -118,6 +125,7 @@ public class KeywordManager {
         Set<String> keywords = new HashSet<>();
         String sql = "SELECT DISTINCT keyword FROM keywords";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return keywords;
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
@@ -135,6 +143,7 @@ public class KeywordManager {
         String deleteSql = "DELETE FROM keywords WHERE file_path = ?";
         
         Connection conn = dbManager.getConnection();
+        if (conn == null) return 0;
         try (PreparedStatement selectStmt = conn.prepareStatement(selectSql);
              PreparedStatement deleteStmt = conn.prepareStatement(deleteSql);
              ResultSet rs = selectStmt.executeQuery()) {
@@ -157,12 +166,13 @@ public class KeywordManager {
     }
 
     public void shutdown() {
-        dbManager.close();
+        // Do not close the singleton DB manager here
     }
 
     public void addKeywords(File newFile, ArrayList<String> strings) {
         String sql = "MERGE INTO keywords (file_path, keyword) KEY(file_path, keyword) VALUES (?, ?)";
         Connection conn = dbManager.getConnection();
+        if (conn == null) return;
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             conn.setAutoCommit(false);
             for (String s : strings) {
