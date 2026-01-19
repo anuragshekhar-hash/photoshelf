@@ -1,5 +1,8 @@
 package org.photoshelf;
 
+import org.photoshelf.plugin.impl.PHashPlugin;
+import org.photoshelf.service.PhotoService;
+import org.photoshelf.service.PluginManager;
 import org.photoshelf.ui.ImagePanelManager;
 import org.photoshelf.ui.SelectionCallback;
 
@@ -42,6 +45,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private JPanel duplicateListPanel;
     private JScrollPane duplicateListScroll;
     private boolean isDuplicateViewMode = false;
+    private final PhotoService photoService;
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -49,6 +53,10 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         setSize(1000, 600);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
+
+        // Initialize Services and Plugins
+        photoService = new PhotoService();
+        PluginManager.getInstance().registerPlugin(new PHashPlugin());
 
         keywordManager = new KeywordManager();
         model = new PhotoShelfModel(keywordManager);
@@ -94,6 +102,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
                 thumbnailCache.shutdown();
                 pHashCacheManager.saveCache();
+                photoService.shutdown();
             }
         });
     }
@@ -340,11 +349,18 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         duplicateFiles.clear();
 
         if (!warmedDirectories.contains(dir.getAbsolutePath())) {
-            setSearchStatus("Warming cache in background...");
-            new CacheWarmer(pHashCacheManager, dir, (d) -> {
-                warmedDirectories.add(d.getAbsolutePath());
-                setSearchStatus(null);
-            }).execute();
+            setSearchStatus("Processing images in background...");
+            
+            // Use PhotoService to scan directory (triggers plugins like pHash)
+            photoService.scanDirectory(dir, (count) -> {
+                // Optional: Update status with progress if needed
+                // setSearchStatus("Processed " + count + " images...");
+            });
+            
+            warmedDirectories.add(dir.getAbsolutePath());
+            
+            // Clear status after a delay or immediately if we don't want to show progress
+            SwingUtilities.invokeLater(() -> setSearchStatus(null));
         }
 
         ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), model.getCurrentDirectory(), toolbarManager.getFilterText(), toolbarManager.getSortCriteria(), toolbarManager.isSortDescending(), toolbarManager.isShowDuplicates(), imagePanelManager.getThumbnailSize());
