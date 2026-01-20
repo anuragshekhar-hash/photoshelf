@@ -738,8 +738,26 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             menu.add(convertToJpegItem);
         }
 
+        if (firstSelectedFile.getName().toLowerCase().endsWith(".mp4")) {
+            JMenuItem playVideoItem = new JMenuItem("Play Video");
+            playVideoItem.addActionListener(e -> handlePlayVideo(firstSelectedFile));
+            menu.add(playVideoItem);
+        }
+
         menu.show(imagePanelManager.getImagePanel(), MouseInfo.getPointerInfo().getLocation().x - imagePanelManager.getImagePanel().getLocationOnScreen().x,
                 MouseInfo.getPointerInfo().getLocation().y - imagePanelManager.getImagePanel().getLocationOnScreen().y);
+    }
+
+    private void handlePlayVideo(File videoFile) {
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(videoFile);
+            } else {
+                JOptionPane.showMessageDialog(this, "Desktop operations not supported on this platform.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Could not open video: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void handleFindDuplicates(JLabel label) {
