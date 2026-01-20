@@ -1,8 +1,8 @@
 package org.photoshelf;
 
+import org.photoshelf.service.PluginManager;
 import org.photoshelf.ui.KeywordEntryField;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
@@ -16,9 +16,9 @@ import java.util.List;
 import java.util.Set;
 
 public class PreviewPanelManager {
-    private final JPanel previewCanvas; // Changed from JLabel to JPanel for custom painting
+    private final JPanel previewCanvas;
     private final JScrollPane previewScroll;
-    private Image currentImage; // Changed from BufferedImage to Image to support Toolkit images (GIFs)
+    private Image currentImage;
     private double scale = 1.0;
     private static final double MIN_SCALE = 0.1;
     private static final double MAX_SCALE = 5.0;
@@ -32,7 +32,6 @@ public class PreviewPanelManager {
         this.mainApp = mainApp;
         this.keywordManager = keywordManager;
 
-        // Custom panel to paint the image scaled while preserving animation
         previewCanvas = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
@@ -44,19 +43,13 @@ public class PreviewPanelManager {
                     int imgHeight = currentImage.getHeight(this);
 
                     if (imgWidth > 0 && imgHeight > 0) {
-                        // Calculate scaled dimensions
                         int newW = (int) (imgWidth * scale);
                         int newH = (int) (imgHeight * scale);
-
-                        // Center the image
                         int x = (panelWidth - newW) / 2;
                         int y = (panelHeight - newH) / 2;
-
-                        // Draw the image scaled. Passing 'this' as observer enables animation for GIFs.
                         g.drawImage(currentImage, x, y, newW, newH, this);
                     }
                 } else {
-                    // Draw placeholder text if no image
                     String text = (currentFile == null) ? "Select an image to preview" : "Cannot preview this file";
                     FontMetrics fm = g.getFontMetrics();
                     int x = (getWidth() - fm.stringWidth(text)) / 2;
@@ -95,7 +88,6 @@ public class PreviewPanelManager {
 
         keywordGridPanel = new JPanel(new GridLayout(0, 1, 0, 2));
 
-        // Wrapper panel to prevent grid from stretching
         JPanel keywordGridWrapper = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         keywordGridWrapper.add(keywordGridPanel);
 
@@ -128,11 +120,12 @@ public class PreviewPanelManager {
     public void showImagePreview(File imgFile) {
         this.currentFile = imgFile;
         try {
-            scale = 1.0; // Reset scale for new image
-            if (imgFile.getName().toLowerCase().endsWith(".gif")) {
-                // Load GIF using Toolkit to preserve animation frames
-                this.currentImage = Toolkit.getDefaultToolkit().createImage(imgFile.getAbsolutePath());
-                
+            scale = 1.0;
+            
+            // Use PluginManager to get the preview image
+            this.currentImage = PluginManager.getInstance().getPreviewImage(imgFile);
+            
+            if (this.currentImage != null) {
                 // Wait for image to load to get dimensions (needed for initial scaling)
                 MediaTracker tracker = new MediaTracker(previewCanvas);
                 tracker.addImage(this.currentImage, 0);
@@ -141,11 +134,6 @@ public class PreviewPanelManager {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-            } else {
-                this.currentImage = ImageIO.read(imgFile);
-            }
-            
-            if (this.currentImage != null) {
                 calculateInitialScale();
             }
             
@@ -202,7 +190,6 @@ public class PreviewPanelManager {
         panel.setBorder(BorderFactory.createCompoundBorder(matteBorder, emptyBorder));
 
         JCheckBox checkBox = new JCheckBox(keyword);
-        // Removed immediate search listener to allow multiple selection
 
         JButton editButton = createStyledButton("\u270E"); // Pencil icon
         editButton.setToolTipText("Rename keyword");

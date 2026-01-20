@@ -1,121 +1,81 @@
 package org.photoshelf;
 
+import org.photoshelf.service.PluginManager;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class ImageLoader extends SwingWorker<Integer, JLabel> {
-    private final File directory;
-    private final String filterText;
-    private final String sortCriteria;
-    private final boolean descending;
-    private final boolean showOnlyDuplicates;
+    private final List<File> filesToDisplay;
     private final int thumbnailSize;
-    public static final List<String> SUPPORTED_EXTENSIONS = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp");
-
     private final PhotoShelfUI ui;
     private final JPanel imagePanel;
-    private final PHashCacheManager pHashCacheManager;
 
-    public ImageLoader(PhotoShelfUI ui, JPanel imagePanel, File directory, String filterText, String sortCriteria, boolean descending, boolean showOnlyDuplicates, int thumbnailSize) {
+    public ImageLoader(PhotoShelfUI ui, JPanel imagePanel, List<File> filesToDisplay, int thumbnailSize) {
         this.ui = ui;
         this.imagePanel = imagePanel;
-        this.directory = directory;
-        this.filterText = filterText.trim().toLowerCase();
-        this.sortCriteria = sortCriteria;
-        this.descending = descending;
-        this.showOnlyDuplicates = showOnlyDuplicates;
+        this.filesToDisplay = filesToDisplay;
         this.thumbnailSize = thumbnailSize;
-        this.pHashCacheManager = ui.getPHashCacheManager();
     }
 
     @Override
     protected Integer doInBackground() throws Exception {
-        List<File> filesToDisplay;
-        try (Stream<Path> stream = Files.list(directory.toPath())) {
-            filesToDisplay = stream
-                    .filter(path -> {
-                        String fileName = path.getFileName().toString();
-                        if (fileName.startsWith(".")) return false; // Skip hidden files/directories
-
-                        String lower = fileName.toLowerCase();
-                        if (lower.lastIndexOf('.') == -1) return false;
-                        String extension = lower.substring(lower.lastIndexOf('.') + 1);
-                        return SUPPORTED_EXTENSIONS.contains(extension) && (filterText.isEmpty() || lower.contains(filterText));
-                    })
-                    .map(Path::toFile)
-                    .collect(Collectors.toList());
-        }
-
-        if (showOnlyDuplicates) {
-            DuplicateImageFinder duplicateFinder = new DuplicateImageFinder();
-            ui.setDuplicateFiles(duplicateFinder.findDuplicates(filesToDisplay));
-            filesToDisplay = new ArrayList<>(ui.getDuplicateFiles());
-        }
-
-        Comparator<File> comparator = switch (sortCriteria) {
-            case "Date Created" -> Comparator.comparing(file -> {
-                try {
-                    return Files.readAttributes(file.toPath(), BasicFileAttributes.class).creationTime();
-                } catch (IOException e) {
-                    return null;
-                }
-            }, Comparator.nullsLast(Comparator.naturalOrder()));
-            case "Size" -> Comparator.comparingLong(File::length);
-            case "Type" -> Comparator.comparing(file -> {
-                String name = file.getName();
-                int lastDot = name.lastIndexOf('.');
-                return (lastDot > 0 && lastDot < name.length() - 1) ? name.substring(lastDot + 1).toLowerCase() : "";
-            });
-            default -> Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER);
-        };
-
-        if (descending) {
-            comparator = comparator.reversed();
-        }
-        filesToDisplay.sort(comparator);
-
         int numThreads = Runtime.getRuntime().availableProcessors();
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
         List<Future<JLabel>> futures = new ArrayList<>();
 
-        for (File imgFile : filesToDisplay) {
-            if (isCancelled()) {
-                break;
-            }
+        for (File file : filesToDisplay) {
+            if (isCancelled()) break;
 
             Callable<JLabel> task = () -> {
                 try {
-                    // This will warm the cache
-                    pHashCacheManager.getHash(imgFile);
+                    // Use PluginManager to get thumbnail if available (e.g. for videos)
+                    BufferedImage thumb = null;
+                    try {
+                        thumb = PluginManager.getInstance().getThumbnail(file);
+                    } catch (Exception e) {
+                        // Ignore plugin errors
+                    }
+                    
+                    ImageIcon icon;
+                    if (thumb != null) {
+                        // Scale plugin thumbnail
+                        int imgWidth = thumb.getWidth();
+                        int imgHeight = thumb.getHeight();
+                        if (thumbnailSize >= imgWidth && thumbnailSize >= imgHeight) {
+                            icon = new ImageIcon(thumb);
+                        } else {
+                            double scale = Math.min((double) thumbnailSize / imgWidth, (double) thumbnailSize / imgHeight);
+                            int newWidth = (int) (imgWidth * scale);
+                            int newHeight = (int) (imgHeight * scale);
+                            Image scaled = thumb.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+                            icon = new ImageIcon(scaled);
+                        }
+                    } else {
+                        // Fallback to standard ImageIO via UI helper
+                        icon = ui.createDisplayIcon(file, thumbnailSize, thumbnailSize);
+                    }
 
-                    ImageIcon icon = ui.createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
                     if (icon == null) return null;
-                    String name = imgFile.getName();
+                    
+                    String name = file.getName();
                     String shortName = name.length() > 20 ? name.substring(0, 17) + "..." : name;
                     JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
                     label.setHorizontalTextPosition(JLabel.CENTER);
                     label.setVerticalTextPosition(JLabel.BOTTOM);
-                    label.setBorder(ui.isDuplicate(imgFile) ? BorderFactory.createLineBorder(Color.RED, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
+                    label.setBorder(ui.isDuplicate(file) ? BorderFactory.createLineBorder(Color.RED, 2) : BorderFactory.createEmptyBorder(4, 4, 4, 4));
                     label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                    label.putClientProperty("imageFile", imgFile);
-                    label.setPreferredSize(new java.awt.Dimension(thumbnailSize + 8, thumbnailSize + 40));
+                    label.putClientProperty("imageFile", file);
+                    label.setPreferredSize(new Dimension(thumbnailSize + 8, thumbnailSize + 40));
                     label.setAlignmentX(Component.LEFT_ALIGNMENT);
                     label.addMouseListener(ui.createImageMouseListener());
                     return label;
                 } catch (Exception e) {
-                    System.err.println("Could not load thumbnail for " + imgFile.getName() + ": " + e.getMessage());
+                    System.err.println("Could not load thumbnail for " + file.getName() + ": " + e.getMessage());
                     return null;
                 }
             };
@@ -125,9 +85,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
         int processedCount = 0;
         for (Future<JLabel> future : futures) {
             try {
-                if (isCancelled()) {
-                    break;
-                }
+                if (isCancelled()) break;
                 JLabel label = future.get();
                 if (label != null) {
                     publish(label);
@@ -148,6 +106,7 @@ public class ImageLoader extends SwingWorker<Integer, JLabel> {
     @Override
     protected void process(List<JLabel> chunks) {
         for (JLabel label : chunks) {
+            if (isCancelled()) break;
             imagePanel.add(label);
         }
         imagePanel.revalidate();

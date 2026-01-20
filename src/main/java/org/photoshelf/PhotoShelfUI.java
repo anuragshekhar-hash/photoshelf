@@ -56,7 +56,6 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
         // Initialize Services and Plugins
         photoService = new PhotoService();
-        PluginManager.getInstance().registerPlugin(new PHashPlugin());
 
         keywordManager = new KeywordManager();
         model = new PhotoShelfModel(keywordManager);
@@ -363,7 +362,23 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             SwingUtilities.invokeLater(() -> setSearchStatus(null));
         }
 
-        ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), model.getCurrentDirectory(), toolbarManager.getFilterText(), toolbarManager.getSortCriteria(), toolbarManager.isSortDescending(), toolbarManager.isShowDuplicates(), imagePanelManager.getThumbnailSize());
+        // Use PhotoService to get the list of files
+        List<File> filesToDisplay = photoService.listFiles(
+            dir, 
+            toolbarManager.getFilterText(), 
+            toolbarManager.getSortCriteria(), 
+            toolbarManager.isSortDescending()
+        );
+
+        if (toolbarManager.isShowDuplicates()) {
+            Set<File> duplicates = photoService.findDuplicates(filesToDisplay);
+            setDuplicateFiles(duplicates);
+            filesToDisplay = new ArrayList<>(duplicates);
+            // Re-sort duplicates if needed, or PhotoService.findDuplicates could return sorted list
+            photoService.sortFiles(filesToDisplay, toolbarManager.getSortCriteria(), toolbarManager.isSortDescending());
+        }
+
+        ImageLoader imageLoader = new ImageLoader(this, imagePanelManager.getImagePanel(), filesToDisplay, imagePanelManager.getThumbnailSize());
         currentWorker = imageLoader;
         imageLoader.addPropertyChangeListener(evt -> {
             if ("state".equals(evt.getPropertyName()) && SwingWorker.StateValue.DONE.equals(evt.getNewValue())) {

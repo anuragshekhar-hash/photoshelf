@@ -1,7 +1,7 @@
 package org.photoshelf;
 
 import org.apache.commons.io.FilenameUtils;
-import static org.photoshelf.ImageLoader.SUPPORTED_EXTENSIONS;
+import org.photoshelf.service.PluginManager;
 
 import javax.imageio.ImageIO;
 import java.io.File;
@@ -24,6 +24,6 @@ public class ImageSupportChecker {
 
     public static boolean isImage(File file) {
         String ext = FilenameUtils.getExtension(file.getName());
-        return SUPPORTED_EXTENSIONS.contains(ext.toLowerCase());
+        return PluginManager.getInstance().getAllSupportedExtensions().contains(ext.toLowerCase());
     }
 }

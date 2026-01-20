@@ -1,9 +1,11 @@
 package org.photoshelf;
 
+import org.photoshelf.service.PluginManager;
 import org.photoshelf.ui.ImagePanelManager;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
@@ -15,7 +17,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Searcher extends SwingWorker<Void, JLabel> {
     private final File searchRoot;
     private final PhotoShelfUI mainApp;
-    private final List<String> supportedExtensions = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp");
     private final AtomicInteger filesFound = new AtomicInteger(0);
     private final SearchParams searchParam;
     private final String Filter;
@@ -35,6 +36,7 @@ public class Searcher extends SwingWorker<Void, JLabel> {
     protected Void doInBackground() throws IOException {
         int maxDepth = searchParam.isRecursive() ? Integer.MAX_VALUE : 1;
         List<File> foundFiles = new ArrayList<>();
+        Set<String> supportedExtensions = PluginManager.getInstance().getAllSupportedExtensions();
 
         Files.walkFileTree(searchRoot.toPath(), EnumSet.noneOf(FileVisitOption.class), maxDepth, new SimpleFileVisitor<Path>() {
             @Override
@@ -53,7 +55,7 @@ public class Searcher extends SwingWorker<Void, JLabel> {
 
                 File file = path.toFile();
 
-                if (!isSupported(file.getName().toLowerCase())) {
+                if (!isSupported(file.getName().toLowerCase(), supportedExtensions)) {
                     return FileVisitResult.CONTINUE;
                 }
 
@@ -125,7 +127,34 @@ public class Searcher extends SwingWorker<Void, JLabel> {
     private JLabel createImageLabel(File imgFile) throws IOException {
         ImagePanelManager imagePanelManager = mainApp.getImagePanelManager();
         int thumbnailSize = imagePanelManager.getThumbnailSize();
-        ImageIcon icon = mainApp.createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
+        
+        // Use PluginManager to get thumbnail if available (e.g. for videos)
+        BufferedImage thumb = null;
+        try {
+            thumb = PluginManager.getInstance().getThumbnail(imgFile);
+        } catch (Exception e) {
+            // Ignore plugin errors
+        }
+        
+        ImageIcon icon;
+        if (thumb != null) {
+            // Scale plugin thumbnail
+            int imgWidth = thumb.getWidth();
+            int imgHeight = thumb.getHeight();
+            if (thumbnailSize >= imgWidth && thumbnailSize >= imgHeight) {
+                icon = new ImageIcon(thumb);
+            } else {
+                double scale = Math.min((double) thumbnailSize / imgWidth, (double) thumbnailSize / imgHeight);
+                int newWidth = (int) (imgWidth * scale);
+                int newHeight = (int) (imgHeight * scale);
+                Image scaled = thumb.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+                icon = new ImageIcon(scaled);
+            }
+        } else {
+            // Fallback to standard ImageIO
+            icon = mainApp.createDisplayIcon(imgFile, thumbnailSize, thumbnailSize);
+        }
+
         String name = imgFile.getName();
         String shortName = name.length() > 20 ? name.substring(0, 17) + "..." : name;
         JLabel label = new JLabel(shortName, icon, JLabel.CENTER);
@@ -140,7 +169,7 @@ public class Searcher extends SwingWorker<Void, JLabel> {
         return label;
     }
 
-    private boolean isSupported(String fileName) {
+    private boolean isSupported(String fileName, Set<String> supportedExtensions) {
         int lastDot = fileName.lastIndexOf('.');
         if (lastDot > 0 && lastDot < fileName.length() - 1) {
             String ext = fileName.substring(lastDot + 1);

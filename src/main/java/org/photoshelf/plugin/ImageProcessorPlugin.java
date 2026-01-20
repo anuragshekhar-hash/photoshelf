@@ -1,6 +1,7 @@
 package org.photoshelf.plugin;
 
 import java.io.File;
+import java.util.List;
 
 /**
  * A plugin that processes individual images.
@@ -20,4 +21,12 @@ public interface ImageProcessorPlugin extends PhotoShelfPlugin {
      * @return true if supported.
      */
     boolean supports(File imageFile);
+
+    /**
+     * Returns a list of file extensions supported by this plugin.
+     * @return List of extensions (e.g., "jpg", "png") without the dot.
+     */
+    default List<String> getSupportedExtensions() {
+        return List.of();
+    }
 }

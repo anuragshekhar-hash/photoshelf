@@ -1,0 +1,3 @@
+org.photoshelf.plugin.impl.PHashPlugin
+org.photoshelf.plugin.impl.VideoSupportPlugin
+org.photoshelf.plugin.impl.DefaultImagePlugin

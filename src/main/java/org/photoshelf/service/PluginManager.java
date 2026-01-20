@@ -1,22 +1,26 @@
 package org.photoshelf.service;
 
-import org.photoshelf.plugin.CollectionAnalysisPlugin;
-import org.photoshelf.plugin.ImageProcessorPlugin;
-import org.photoshelf.plugin.PhotoShelfPlugin;
+import org.photoshelf.plugin.*;
 
+import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ServiceLoader;
+import java.util.Set;
 
 public class PluginManager {
     private static PluginManager instance;
     private final List<ImageProcessorPlugin> imageProcessors = new ArrayList<>();
     private final List<CollectionAnalysisPlugin<?>> analysisPlugins = new ArrayList<>();
+    private final List<ThumbnailProviderPlugin> thumbnailProviders = new ArrayList<>();
+    private final List<PreviewProviderPlugin> previewProviders = new ArrayList<>();
 
     private PluginManager() {
-        // In a real modular app, we would use ServiceLoader here.
-        // For now, we will manually register built-in plugins.
+        loadPlugins();
     }
 
     public static synchronized PluginManager getInstance() {
@@ -26,6 +30,13 @@ public class PluginManager {
         return instance;
     }
 
+    private void loadPlugins() {
+        ServiceLoader<PhotoShelfPlugin> loader = ServiceLoader.load(PhotoShelfPlugin.class);
+        for (PhotoShelfPlugin plugin : loader) {
+            registerPlugin(plugin);
+        }
+    }
+
     public void registerPlugin(PhotoShelfPlugin plugin) {
         plugin.onEnable();
         if (plugin instanceof ImageProcessorPlugin) {
@@ -33,6 +44,12 @@ public class PluginManager {
         }
         if (plugin instanceof CollectionAnalysisPlugin) {
             analysisPlugins.add((CollectionAnalysisPlugin<?>) plugin);
+        }
+        if (plugin instanceof ThumbnailProviderPlugin) {
+            thumbnailProviders.add((ThumbnailProviderPlugin) plugin);
+        }
+        if (plugin instanceof PreviewProviderPlugin) {
+            previewProviders.add((PreviewProviderPlugin) plugin);
         }
         System.out.println("Registered plugin: " + plugin.getName());
     }
@@ -55,6 +72,40 @@ public class PluginManager {
                 }
             }
         }
+    }
+    
+    public BufferedImage getThumbnail(File file) throws IOException {
+        for (ThumbnailProviderPlugin provider : thumbnailProviders) {
+            if (provider.supportsThumbnail(file)) {
+                return provider.getThumbnail(file);
+            }
+        }
+        return null;
+    }
+
+    public Image getPreviewImage(File file) throws IOException {
+        for (PreviewProviderPlugin provider : previewProviders) {
+            if (provider.supportsPreview(file)) {
+                return provider.getPreviewImage(file);
+            }
+        }
+        return null;
+    }
+    
+    public Set<String> getAllSupportedExtensions() {
+        Set<String> extensions = new HashSet<>();
+        // Default image extensions
+        extensions.add("jpg");
+        extensions.add("jpeg");
+        extensions.add("png");
+        extensions.add("gif");
+        extensions.add("bmp");
+        extensions.add("webp");
+        
+        for (ImageProcessorPlugin plugin : imageProcessors) {
+            extensions.addAll(plugin.getSupportedExtensions());
+        }
+        return extensions;
     }
     
     public void shutdown() {
