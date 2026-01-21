@@ -13,6 +13,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <twelvemonkeys.version>3.12.0</twelvemonkeys.version>
+        <javacv.version>1.5.10</javacv.version>
+        <ffmpeg.version>6.1.1-1.5.10</ffmpeg.version>
     </properties>
 
     <repositories>
@@ -49,7 +51,7 @@
             <artifactId>h2</artifactId>
             <version>2.2.224</version>
         </dependency>
-        <!-- JCodec for video thumbnails -->
+        <!-- JCodec for MP4 thumbnails -->
         <dependency>
             <groupId>org.jcodec</groupId>
             <artifactId>jcodec</artifactId>
@@ -59,6 +61,18 @@
             <groupId>org.jcodec</groupId>
             <artifactId>jcodec-javase</artifactId>
             <version>0.2.5</version>
+        </dependency>
+
+        <!-- JavaCV for WebM and other formats -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacv</artifactId>
+            <version>${javacv.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg-platform</artifactId>
+            <version>${ffmpeg.version}</version>
         </dependency>
     </dependencies>
 

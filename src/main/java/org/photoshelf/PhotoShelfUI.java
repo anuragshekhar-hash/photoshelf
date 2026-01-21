@@ -738,7 +738,8 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             menu.add(convertToJpegItem);
         }
 
-        if (firstSelectedFile.getName().toLowerCase().endsWith(".mp4")) {
+        if (firstSelectedFile.getName().toLowerCase().endsWith(".mp4") || 
+            firstSelectedFile.getName().toLowerCase().endsWith(".webm")) {
             JMenuItem playVideoItem = new JMenuItem("Play Video");
             playVideoItem.addActionListener(e -> handlePlayVideo(firstSelectedFile));
             menu.add(playVideoItem);

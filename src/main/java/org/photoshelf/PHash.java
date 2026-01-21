@@ -14,7 +14,10 @@ public class PHash {
         if (img == null) {
             throw new IOException("Unsupported image format");
         }
+        return getHash(img);
+    }
 
+    public static String getHash(BufferedImage img) {
         // 1. Resize to 8x8
         BufferedImage resizedImg = new BufferedImage(8, 8, BufferedImage.TYPE_BYTE_GRAY);
         Graphics2D g2d = resizedImg.createGraphics();

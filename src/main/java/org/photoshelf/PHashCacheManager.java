@@ -1,5 +1,8 @@
 package org.photoshelf;
 
+import org.photoshelf.service.PluginManager;
+
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -65,7 +68,18 @@ public class PHashCacheManager {
         }
 
         // Calculate new hash
-        String hash = PHash.getHash(file);
+        String hash;
+        try {
+            hash = PHash.getHash(file);
+        } catch (IOException e) {
+            // Try getting thumbnail from plugins (e.g. for video)
+            BufferedImage thumb = PluginManager.getInstance().getThumbnail(file);
+            if (thumb != null) {
+                hash = PHash.getHash(thumb);
+            } else {
+                throw e;
+            }
+        }
         
         // Update DB
         String sqlMerge = "MERGE INTO image_hashes (file_path, hash, last_modified) KEY(file_path) VALUES (?, ?, ?)";
