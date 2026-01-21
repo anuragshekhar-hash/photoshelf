@@ -117,6 +117,7 @@ public class PluginManager {
         // Add video extensions explicitly as fallbacks
         extensions.add("mp4");
         extensions.add("webm");
+        extensions.add("avif");
         
         for (ImageProcessorPlugin plugin : imageProcessors) {
             extensions.addAll(plugin.getSupportedExtensions());
