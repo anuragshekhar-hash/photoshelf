@@ -1,5 +1,6 @@
 package org.photoshelf;
 
+import org.photoshelf.plugin.UserInterfacePlugin;
 import org.photoshelf.plugin.impl.PHashPlugin;
 import org.photoshelf.service.PhotoService;
 import org.photoshelf.service.PluginManager;
@@ -72,6 +73,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         pHashCacheManager = new PHashCacheManager();
 
         setJMenuBar(createMenuBar());
+        loadUiPlugins();
 
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.add(toolbarManager.getToolPanel(), BorderLayout.CENTER);
@@ -104,6 +106,24 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
                 photoService.shutdown();
             }
         });
+    }
+
+    private void loadUiPlugins() {
+        JMenu pluginsMenu = new JMenu("Plugins");
+        boolean hasPlugins = false;
+        
+        for (UserInterfacePlugin plugin : PluginManager.getInstance().getUiPlugins()) {
+            plugin.setContext(this);
+            JMenuItem item = plugin.getMenuItem();
+            if (item != null) {
+                pluginsMenu.add(item);
+                hasPlugins = true;
+            }
+        }
+        
+        if (hasPlugins) {
+            getJMenuBar().add(pluginsMenu);
+        }
     }
 
     private JMenuBar createMenuBar() {
@@ -1046,5 +1066,19 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
     public PHashCacheManager getPHashCacheManager() {
         return pHashCacheManager;
+    }
+    
+    public List<File> getSelectedFiles() {
+        return model.getSelectedLabels().stream()
+                .map(label -> (File) label.getClientProperty("imageFile"))
+                .collect(Collectors.toList());
+    }
+    
+    public Set<JLabel> getSelectedLabels() {
+        return new HashSet<>(model.getSelectedLabels());
+    }
+    
+    public PreviewPanelManager getPreviewPanelManager() {
+        return previewPanelManager;
     }
 }

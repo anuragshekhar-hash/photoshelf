@@ -330,4 +330,14 @@ public class PreviewPanelManager {
     private boolean isValidKeyword(String keyword) {
         return !keyword.matches(".*[,&|!()].*");
     }
+    
+    public File getCurrentFile() {
+        return currentFile;
+    }
+
+    public void setPreviewImage(Image image) {
+        this.currentImage = image;
+        previewCanvas.revalidate();
+        previewCanvas.repaint();
+    }
 }

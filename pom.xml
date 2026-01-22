@@ -15,6 +15,9 @@
         <twelvemonkeys.version>3.12.0</twelvemonkeys.version>
         <javacv.version>1.5.10</javacv.version>
         <ffmpeg.version>6.1.1-1.5.10</ffmpeg.version>
+        <openblas.version>0.3.26-1.5.10</openblas.version>
+        <cascade.url>https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_alt.xml</cascade.url>
+        <cascade.file>haarcascade_frontalface_alt.xml</cascade.file>
     </properties>
 
     <repositories>
@@ -74,11 +77,69 @@
             <artifactId>ffmpeg-platform</artifactId>
             <version>${ffmpeg.version}</version>
         </dependency>
+        <!-- OpenBLAS for OpenCV -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>openblas-platform</artifactId>
+            <version>${openblas.version}</version>
+        </dependency>
+        <!-- OpenCV platform -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv-platform</artifactId>
+            <version>4.9.0-1.5.10</version>
+        </dependency>
     </dependencies>
 
     <build>
         <finalName>ImageOrganizer</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>download-cascade</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <mkdir dir="${project.build.directory}/cascades"/>
+                                <get src="${cascade.url}" dest="${project.build.directory}/cascades/${cascade.file}" skipexisting="true"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <includeEmptyDirs>true</includeEmptyDirs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>copy-cascades</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/cascades</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.build.directory}/cascades</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

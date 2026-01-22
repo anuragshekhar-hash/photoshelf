@@ -19,6 +19,7 @@ public class PluginManager {
     private final List<CollectionAnalysisPlugin<?>> analysisPlugins = new ArrayList<>();
     private final List<ThumbnailProviderPlugin> thumbnailProviders = new ArrayList<>();
     private final List<PreviewProviderPlugin> previewProviders = new ArrayList<>();
+    private final List<UserInterfacePlugin> uiPlugins = new ArrayList<>();
 
     private PluginManager() {
         loadPlugins();
@@ -60,6 +61,9 @@ public class PluginManager {
             if (plugin instanceof PreviewProviderPlugin) {
                 previewProviders.add((PreviewProviderPlugin) plugin);
             }
+            if (plugin instanceof UserInterfacePlugin) {
+                uiPlugins.add((UserInterfacePlugin) plugin);
+            }
             System.out.println("Registered plugin: " + plugin.getName());
         } catch (Exception e) {
             System.err.println("Failed to enable plugin " + plugin.getName() + ": " + e.getMessage());
@@ -73,6 +77,10 @@ public class PluginManager {
 
     public List<CollectionAnalysisPlugin<?>> getAnalysisPlugins() {
         return new ArrayList<>(analysisPlugins);
+    }
+    
+    public List<UserInterfacePlugin> getUiPlugins() {
+        return new ArrayList<>(uiPlugins);
     }
 
     public void processImage(File file) {
@@ -128,5 +136,6 @@ public class PluginManager {
     public void shutdown() {
         for (ImageProcessorPlugin p : imageProcessors) p.onDisable();
         for (CollectionAnalysisPlugin<?> p : analysisPlugins) p.onDisable();
+        for (UserInterfacePlugin p : uiPlugins) p.onDisable();
     }
 }
