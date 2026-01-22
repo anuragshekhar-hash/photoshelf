@@ -5,6 +5,7 @@ import org.photoshelf.plugin.impl.PHashPlugin;
 import org.photoshelf.service.PhotoService;
 import org.photoshelf.service.PluginManager;
 import org.photoshelf.ui.ImagePanelManager;
+import org.photoshelf.ui.PluginManagementDialog;
 import org.photoshelf.ui.SelectionCallback;
 
 import javax.imageio.ImageIO;
@@ -159,6 +160,11 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
         JMenuItem normalViewItem = new JMenuItem("Back to Normal View");
         normalViewItem.addActionListener(e -> switchToNormalView());
         toolsMenu.add(normalViewItem);
+
+        toolsMenu.add(new JSeparator());
+        JMenuItem managePluginsItem = new JMenuItem("Manage Plugins");
+        managePluginsItem.addActionListener(e -> new PluginManagementDialog(this).setVisible(true));
+        toolsMenu.add(managePluginsItem);
 
         return menuBar;
     }

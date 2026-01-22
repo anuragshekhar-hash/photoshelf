@@ -4,24 +4,24 @@ import org.photoshelf.plugin.*;
 
 import java.awt.Image;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ServiceLoader;
-import java.util.Set;
+import java.io.*;
+import java.util.*;
 
 public class PluginManager {
     private static PluginManager instance;
+    private final List<PhotoShelfPlugin> allPlugins = new ArrayList<>();
+    private final Map<String, Boolean> pluginStates = new HashMap<>();
+    private final File configFile = new File(System.getProperty("user.home"), ".photoshelf_cache/plugins.properties");
+
     private final List<ImageProcessorPlugin> imageProcessors = new ArrayList<>();
     private final List<CollectionAnalysisPlugin<?>> analysisPlugins = new ArrayList<>();
     private final List<ThumbnailProviderPlugin> thumbnailProviders = new ArrayList<>();
     private final List<PreviewProviderPlugin> previewProviders = new ArrayList<>();
     private final List<UserInterfacePlugin> uiPlugins = new ArrayList<>();
+    private final List<PluginStateListener> listeners = new ArrayList<>();
 
     private PluginManager() {
+        loadPluginStates();
         loadPlugins();
     }
 
@@ -32,18 +32,78 @@ public class PluginManager {
         return instance;
     }
 
+    private void loadPluginStates() {
+        Properties props = new Properties();
+        if (configFile.exists()) {
+            try (FileInputStream in = new FileInputStream(configFile)) {
+                props.load(in);
+                for (String key : props.stringPropertyNames()) {
+                    pluginStates.put(key, Boolean.parseBoolean(props.getProperty(key)));
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void savePluginStates() {
+        Properties props = new Properties();
+        for (Map.Entry<String, Boolean> entry : pluginStates.entrySet()) {
+            props.setProperty(entry.getKey(), String.valueOf(entry.getValue()));
+        }
+        try {
+            configFile.getParentFile().mkdirs();
+            try (FileOutputStream out = new FileOutputStream(configFile)) {
+                props.store(out, "PhotoShelf Plugin States");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void loadPlugins() {
         ServiceLoader<PhotoShelfPlugin> loader = ServiceLoader.load(PhotoShelfPlugin.class);
         Iterator<PhotoShelfPlugin> iterator = loader.iterator();
         while (iterator.hasNext()) {
             try {
                 PhotoShelfPlugin plugin = iterator.next();
-                registerPlugin(plugin);
+                allPlugins.add(plugin);
+                
+                String className = plugin.getClass().getName();
+                boolean isActive = pluginStates.getOrDefault(className, true);
+                pluginStates.putIfAbsent(className, true);
+                
+                if (isActive) {
+                    registerPlugin(plugin);
+                }
             } catch (Throwable t) {
                 System.err.println("Failed to load a plugin: " + t.getMessage());
                 t.printStackTrace();
             }
         }
+        savePluginStates();
+    }
+
+    public void setPluginActive(PhotoShelfPlugin plugin, boolean active) {
+        String className = plugin.getClass().getName();
+        if (pluginStates.getOrDefault(className, true) == active) return;
+
+        pluginStates.put(className, active);
+        if (active) {
+            registerPlugin(plugin);
+        } else {
+            unregisterPlugin(plugin);
+        }
+        savePluginStates();
+        firePluginStateChanged();
+    }
+
+    public boolean isPluginActive(PhotoShelfPlugin plugin) {
+        return pluginStates.getOrDefault(plugin.getClass().getName(), true);
+    }
+
+    public List<PhotoShelfPlugin> getAllPlugins() {
+        return new ArrayList<>(allPlugins);
     }
 
     public void registerPlugin(PhotoShelfPlugin plugin) {
@@ -67,6 +127,31 @@ public class PluginManager {
             System.out.println("Registered plugin: " + plugin.getName());
         } catch (Exception e) {
             System.err.println("Failed to enable plugin " + plugin.getName() + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void unregisterPlugin(PhotoShelfPlugin plugin) {
+        try {
+            plugin.onDisable();
+            if (plugin instanceof ImageProcessorPlugin) {
+                imageProcessors.remove(plugin);
+            }
+            if (plugin instanceof CollectionAnalysisPlugin) {
+                analysisPlugins.remove(plugin);
+            }
+            if (plugin instanceof ThumbnailProviderPlugin) {
+                thumbnailProviders.remove(plugin);
+            }
+            if (plugin instanceof PreviewProviderPlugin) {
+                previewProviders.remove(plugin);
+            }
+            if (plugin instanceof UserInterfacePlugin) {
+                uiPlugins.remove(plugin);
+            }
+            System.out.println("Unregistered plugin: " + plugin.getName());
+        } catch (Exception e) {
+            System.err.println("Failed to disable plugin " + plugin.getName() + ": " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -115,18 +200,6 @@ public class PluginManager {
     
     public Set<String> getAllSupportedExtensions() {
         Set<String> extensions = new HashSet<>();
-        // Default image extensions
-        extensions.add("jpg");
-        extensions.add("jpeg");
-        extensions.add("png");
-        extensions.add("gif");
-        extensions.add("bmp");
-        extensions.add("webp");
-        // Add video extensions explicitly as fallbacks
-        extensions.add("mp4");
-        extensions.add("webm");
-        extensions.add("avif");
-        
         for (ImageProcessorPlugin plugin : imageProcessors) {
             extensions.addAll(plugin.getSupportedExtensions());
         }
@@ -137,5 +210,20 @@ public class PluginManager {
         for (ImageProcessorPlugin p : imageProcessors) p.onDisable();
         for (CollectionAnalysisPlugin<?> p : analysisPlugins) p.onDisable();
         for (UserInterfacePlugin p : uiPlugins) p.onDisable();
+        savePluginStates();
+    }
+    
+    public void addPluginStateListener(PluginStateListener listener) {
+        listeners.add(listener);
+    }
+    
+    public void removePluginStateListener(PluginStateListener listener) {
+        listeners.remove(listener);
+    }
+    
+    private void firePluginStateChanged() {
+        for (PluginStateListener listener : listeners) {
+            listener.onPluginStateChanged();
+        }
     }
 }
