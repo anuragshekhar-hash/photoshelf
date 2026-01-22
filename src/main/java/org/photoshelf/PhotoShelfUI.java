@@ -1,9 +1,13 @@
 package org.photoshelf;
 
+import org.photoshelf.plugin.ImageProcessorPlugin;
+import org.photoshelf.plugin.PhotoShelfPlugin;
+import org.photoshelf.plugin.ThumbnailProviderPlugin;
 import org.photoshelf.plugin.UserInterfacePlugin;
 import org.photoshelf.plugin.impl.PHashPlugin;
 import org.photoshelf.service.PhotoService;
 import org.photoshelf.service.PluginManager;
+import org.photoshelf.service.PluginStateListener;
 import org.photoshelf.ui.ImagePanelManager;
 import org.photoshelf.ui.PluginManagementDialog;
 import org.photoshelf.ui.SelectionCallback;
@@ -26,7 +30,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 
-public class PhotoShelfUI extends JFrame implements SelectionCallback {
+public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginStateListener {
     private SwingWorker<?, ?> currentWorker;
     private final PhotoShelfModel model;
     private final DirectoryTreeManager directoryTreeManager;
@@ -48,6 +52,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     private JScrollPane duplicateListScroll;
     private boolean isDuplicateViewMode = false;
     private final PhotoService photoService;
+    private JMenu pluginsMenu;
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -58,6 +63,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
 
         // Initialize Services and Plugins
         photoService = new PhotoService();
+        PluginManager.getInstance().addPluginStateListener(this);
 
         keywordManager = new KeywordManager();
         model = new PhotoShelfModel(keywordManager);
@@ -110,9 +116,12 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     }
 
     private void loadUiPlugins() {
-        JMenu pluginsMenu = new JMenu("Plugins");
-        boolean hasPlugins = false;
+        if (pluginsMenu == null) {
+            pluginsMenu = new JMenu("Plugins");
+        }
+        pluginsMenu.removeAll();
         
+        boolean hasPlugins = false;
         for (UserInterfacePlugin plugin : PluginManager.getInstance().getUiPlugins()) {
             plugin.setContext(this);
             JMenuItem item = plugin.getMenuItem();
@@ -122,9 +131,13 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
             }
         }
         
-        if (hasPlugins) {
+        if (hasPlugins && pluginsMenu.getParent() == null) {
             getJMenuBar().add(pluginsMenu);
+        } else if (!hasPlugins && pluginsMenu.getParent() != null) {
+            getJMenuBar().remove(pluginsMenu);
         }
+        getJMenuBar().revalidate();
+        getJMenuBar().repaint();
     }
 
     private JMenuBar createMenuBar() {
@@ -1086,5 +1099,16 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback {
     
     public PreviewPanelManager getPreviewPanelManager() {
         return previewPanelManager;
+    }
+
+    @Override
+    public void onPluginStateChanged(PhotoShelfPlugin plugin, boolean active) {
+        SwingUtilities.invokeLater(() -> {
+            loadUiPlugins();
+            if (plugin instanceof org.photoshelf.plugin.ImageProcessorPlugin || 
+                plugin instanceof org.photoshelf.plugin.ThumbnailProviderPlugin) {
+                displayImages(model.getCurrentDirectory());
+            }
+        });
     }
 }

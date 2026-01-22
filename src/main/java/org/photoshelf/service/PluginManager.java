@@ -95,7 +95,7 @@ public class PluginManager {
             unregisterPlugin(plugin);
         }
         savePluginStates();
-        firePluginStateChanged();
+        firePluginStateChanged(plugin, active);
     }
 
     public boolean isPluginActive(PhotoShelfPlugin plugin) {
@@ -221,9 +221,9 @@ public class PluginManager {
         listeners.remove(listener);
     }
     
-    private void firePluginStateChanged() {
+    private void firePluginStateChanged(PhotoShelfPlugin plugin, boolean active) {
         for (PluginStateListener listener : listeners) {
-            listener.onPluginStateChanged();
+            listener.onPluginStateChanged(plugin, active);
         }
     }
 }
