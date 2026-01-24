@@ -200,8 +200,10 @@ public class PluginManager {
     
     public Set<String> getAllSupportedExtensions() {
         Set<String> extensions = new HashSet<>();
-        for (ImageProcessorPlugin plugin : imageProcessors) {
-            extensions.addAll(plugin.getSupportedExtensions());
+        for (PhotoShelfPlugin plugin : allPlugins) {
+            if (plugin instanceof ImageProcessorPlugin && isPluginActive(plugin)) {
+                extensions.addAll(((ImageProcessorPlugin) plugin).getSupportedExtensions());
+            }
         }
         return extensions;
     }

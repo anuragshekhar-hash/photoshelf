@@ -36,7 +36,13 @@ public class Searcher extends SwingWorker<Void, JLabel> {
     protected Void doInBackground() throws IOException {
         int maxDepth = searchParam.isRecursive() ? Integer.MAX_VALUE : 1;
         List<File> foundFiles = new ArrayList<>();
-        Set<String> supportedExtensions = PluginManager.getInstance().getAllSupportedExtensions();
+        
+        Set<String> supportedExtensions;
+        if (searchParam.getAllowedExtensions() != null && !searchParam.getAllowedExtensions().isEmpty()) {
+            supportedExtensions = searchParam.getAllowedExtensions();
+        } else {
+            supportedExtensions = PluginManager.getInstance().getAllSupportedExtensions();
+        }
 
         Files.walkFileTree(searchRoot.toPath(), EnumSet.noneOf(FileVisitOption.class), maxDepth, new SimpleFileVisitor<Path>() {
             @Override

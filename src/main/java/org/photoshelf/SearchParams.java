@@ -15,6 +15,7 @@ public class SearchParams {
     List<String> keywords;
     private String expression;
     private KeywordExpressionEvaluator evaluater;
+    private Set<String> allowedExtensions;
 
     public List<String> getKeywords() {
         return keywords;
@@ -100,5 +101,13 @@ public class SearchParams {
             evaluater = new KeywordExpressionEvaluator(expression);
         }
         return evaluater.evaluate(keywords);
+    }
+
+    public Set<String> getAllowedExtensions() {
+        return allowedExtensions;
+    }
+
+    public void setAllowedExtensions(Set<String> allowedExtensions) {
+        this.allowedExtensions = allowedExtensions;
     }
 }

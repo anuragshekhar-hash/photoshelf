@@ -15,6 +15,7 @@ public class SearchBar extends JToolBar {
     private final JCheckBox searchAllDirsCheckBox;
     private final JCheckBox noKeywordsCheckBox;
     private final JCheckBox filterCurrentViewCheckBox;
+    private final ExtensionFilterPanel extensionFilterPanel;
     private final PhotoShelfUI mainApp;
     private String keywordExpression;
     private final JLabel expressionLabel;
@@ -41,6 +42,9 @@ public class SearchBar extends JToolBar {
 
         filterCurrentViewCheckBox = new JCheckBox("Filter view");
         filterCurrentViewCheckBox.setToolTipText("Apply search criteria to the images currently shown in the grid");
+
+        extensionFilterPanel = new ExtensionFilterPanel();
+        extensionFilterPanel.setOnFilterChanged(this::performSearch);
 
         JButton expressionBuilderButton = new JButton("...");
         expressionBuilderButton.setToolTipText("Open Visual Keyword Expression Builder");
@@ -72,6 +76,7 @@ public class SearchBar extends JToolBar {
             filterCurrentViewCheckBox.setSelected(false);
             keywordExpression = null;
             expressionLabel.setText("");
+            extensionFilterPanel.refreshExtensions(); // Reset extensions
             mainApp.displayImages(mainApp.getCurrentDirectory()); // Refresh view
         });
 
@@ -89,6 +94,7 @@ public class SearchBar extends JToolBar {
 
         add(searchAllDirsCheckBox);
         add(filterCurrentViewCheckBox);
+        add(extensionFilterPanel);
         addSeparator();
 
         add(searchButton);
@@ -98,6 +104,8 @@ public class SearchBar extends JToolBar {
     private void performSearch() {
         SearchParams searchParams = new SearchParams();
         searchParams.setRecursive(isRecursive());
+        searchParams.setAllowedExtensions(extensionFilterPanel.getSelectedExtensions());
+
         if (noKeywordsCheckBox.isSelected()) {
             searchParams.setNoKeywords(true);
         } else if (keywordExpression != null && !keywordExpression.isBlank()) {
