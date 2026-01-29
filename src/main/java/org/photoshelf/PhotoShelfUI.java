@@ -737,7 +737,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         JMenuItem deleteItem = new JMenuItem("Delete");
         JMenuItem copyPathItem = new JMenuItem("Copy Path");
         JMenuItem manageKeywordsItem = new JMenuItem("Manage Keywords");
-        JMenuItem findDuplicatesItem = new JMenuItem("Find Duplicates");
+        JMenuItem findSimilarImagesItem = new JMenuItem("Find Similar Images");
 
         renameItem.setEnabled(selectedLabels.size() == 1);
         moveItem.setEnabled(!selectedLabels.isEmpty());
@@ -745,7 +745,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         deleteItem.setEnabled(!selectedLabels.isEmpty());
         copyPathItem.setEnabled(!selectedLabels.isEmpty());
         manageKeywordsItem.setEnabled(!selectedLabels.isEmpty());
-        findDuplicatesItem.setEnabled(selectedLabels.size() == 1);
+        findSimilarImagesItem.setEnabled(selectedLabels.size() == 1);
 
         renameItem.addActionListener(e -> handleRenameImage(selectedLabels.get(0)));
         moveItem.addActionListener(e -> handleMoveImages(selectedLabels));
@@ -759,7 +759,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         });
 
         manageKeywordsItem.addActionListener(e -> handleManageKeywords(selectedLabels));
-        findDuplicatesItem.addActionListener(e -> handleFindDuplicates(selectedLabels.get(0)));
+        findSimilarImagesItem.addActionListener(e -> handleFindSimilarImages(selectedLabels.get(0)));
 
         menu.add(renameItem);
         menu.add(moveItem);
@@ -768,7 +768,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         menu.add(copyPathItem);
         menu.add(new JSeparator());
         menu.add(manageKeywordsItem);
-        menu.add(findDuplicatesItem);
+        menu.add(findSimilarImagesItem);
 
         File firstSelectedFile = (File) selectedLabels.get(0).getClientProperty("imageFile");
         if (firstSelectedFile.getName().toLowerCase().endsWith(".webp")) {
@@ -800,8 +800,22 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         }
     }
 
-    private void handleFindDuplicates(JLabel label) {
+    private void handleFindSimilarImages(JLabel label) {
         File imageFile = (File) label.getClientProperty("imageFile");
+        
+        String input = JOptionPane.showInputDialog(this, "Enter similarity threshold (0-10, lower is stricter):", "5");
+        if (input == null) return;
+        
+        int threshold;
+        try {
+            threshold = Integer.parseInt(input);
+            if (threshold < 0) threshold = 0;
+        } catch (NumberFormatException e) {
+            threshold = 5;
+        }
+        
+        final int finalThreshold = threshold;
+
         new SwingWorker<List<File>, Void>() {
             @Override
             protected List<File> doInBackground() throws Exception {
@@ -809,14 +823,20 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
                 if (targetHash == null) {
                     return Collections.emptyList();
                 }
+                
+                Map<String, String> allHashes = pHashCacheManager.getAllHashes();
                 List<File> duplicates = new ArrayList<>();
-                for (String path : pHashCacheManager.getAllFilePaths()) {
+                
+                for (Map.Entry<String, String> entry : allHashes.entrySet()) {
+                    String path = entry.getKey();
+                    String otherHash = entry.getValue();
+                    
                     File otherFile = new File(path);
-                    if (otherFile.equals(imageFile) || !otherFile.exists() || !ImageSupportChecker.isImage(otherFile)) {
+                    if (otherFile.equals(imageFile) || !otherFile.exists() || otherFile.isHidden() || !ImageSupportChecker.isImage(otherFile)) {
                         continue;
                     }
-                    String otherHash = pHashCacheManager.getHash(otherFile);
-                    if (otherHash != null && PHash.distance(targetHash, otherHash) <= 5) {
+                    
+                    if (otherHash != null && PHash.distance(targetHash, otherHash) <= finalThreshold) {
                         duplicates.add(otherFile);
                     }
                 }
@@ -830,12 +850,12 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
                     duplicates.add(0, imageFile); // Add the original image to the list
 
                     if (duplicates.size() <= 1) {
-                        JOptionPane.showMessageDialog(PhotoShelfUI.this, "No duplicates found across all scanned directories.", "Find Duplicates", JOptionPane.INFORMATION_MESSAGE);
+                        JOptionPane.showMessageDialog(PhotoShelfUI.this, "No similar images found across all scanned directories.", "Find Similar Images", JOptionPane.INFORMATION_MESSAGE);
                         return;
                     }
 
                     prepareForNewTask();
-                    setSearchStatus("Showing " + duplicates.size() + " duplicate images.");
+                    setSearchStatus("Showing " + duplicates.size() + " similar images.");
 
                     for (File file : duplicates) {
                         try {
@@ -851,7 +871,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
                     imagePanelManager.getImagePanel().repaint();
 
                 } catch (InterruptedException | ExecutionException e) {
-                    JOptionPane.showMessageDialog(PhotoShelfUI.this, "Error finding duplicates: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(PhotoShelfUI.this, "Error finding similar images: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 }
             }
         }.execute();

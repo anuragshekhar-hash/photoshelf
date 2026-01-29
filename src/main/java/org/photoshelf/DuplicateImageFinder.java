@@ -5,6 +5,8 @@ import java.util.*;
 
 public class DuplicateImageFinder {
 
+    private final SimilarImageFinder similarImageFinder = new SimilarImageFinder();
+
     public Set<File> findDuplicates(List<File> files) {
         Set<File> duplicateFiles = new HashSet<>();
         Map<String, List<File>> filesBySignature = new HashMap<>();
@@ -22,6 +24,10 @@ public class DuplicateImageFinder {
             }
         }
         return duplicateFiles;
+    }
+
+    public Map<File, List<File>> findSimilarImages(List<File> files, int threshold) {
+        return similarImageFinder.findSimilarImages(files, threshold);
     }
 
     private String createFileSignature(File file) {
