@@ -42,6 +42,18 @@ public class KeywordManager {
         }
     }
 
+    public void deleteKeywordGlobally(String keyword) {
+        String sql = "DELETE FROM keywords WHERE keyword = ?";
+        Connection conn = dbManager.getConnection();
+        if (conn == null) return;
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, keyword.toLowerCase());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
     public void renameKeyword(String oldKeyword, String newKeyword) {
         String sql = "UPDATE keywords SET keyword = ? WHERE keyword = ?";
         Connection conn = dbManager.getConnection();

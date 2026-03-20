@@ -100,6 +100,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         duplicateListPanel = new JPanel();
         duplicateListPanel.setLayout(new BoxLayout(duplicateListPanel, BoxLayout.Y_AXIS));
         duplicateListScroll = new JScrollPane(duplicateListPanel);
+        duplicateListScroll.getVerticalScrollBar().setUnitIncrement(20);
 
         File rootDir = new File(System.getProperty("user.home"));
         model.setCurrentDirectory(rootDir);

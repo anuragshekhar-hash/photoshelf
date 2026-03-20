@@ -57,11 +57,19 @@ public class SearchBar extends JToolBar {
                 expressionLabel.setText(" " + keywordExpression);
             }
         });
+        
+        JButton allKeywordsButton = new JButton("All Keywords");
+        allKeywordsButton.setToolTipText("View, edit, and select from all available keywords");
+        allKeywordsButton.addActionListener(e -> {
+            AllKeywordsDialog dialog = new AllKeywordsDialog(mainApp, this);
+            dialog.setVisible(true);
+        });
 
         noKeywordsCheckBox.addItemListener(e -> {
             boolean isSelected = e.getStateChange() == ItemEvent.SELECTED;
             keywordField.setEnabled(!isSelected);
             expressionBuilderButton.setEnabled(!isSelected);
+            allKeywordsButton.setEnabled(!isSelected);
         });
 
         JButton searchButton = new JButton("Search");
@@ -89,6 +97,7 @@ public class SearchBar extends JToolBar {
         add(noKeywordsCheckBox);
         add(keywordField);
         add(expressionBuilderButton);
+        add(allKeywordsButton);
         add(expressionLabel);
         addSeparator();
 
@@ -126,6 +135,16 @@ public class SearchBar extends JToolBar {
             searchParams.setSearchString(pattern.trim());
         }
         mainApp.executeSearch(searchParams, filterCurrentViewCheckBox.isSelected());
+    }
+
+    public void setKeywordExpression(String expression) {
+        this.keywordExpression = expression;
+        this.expressionLabel.setText(" " + expression);
+        this.keywordField.setText(expression);
+    }
+    
+    public void performSearchPublic() {
+        performSearch();
     }
 
     public String getSearchQuery() {
