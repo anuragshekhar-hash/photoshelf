@@ -57,19 +57,11 @@ public class SearchBar extends JToolBar {
                 expressionLabel.setText(" " + keywordExpression);
             }
         });
-        
-        JButton allKeywordsButton = new JButton("All Keywords");
-        allKeywordsButton.setToolTipText("View, edit, and select from all available keywords");
-        allKeywordsButton.addActionListener(e -> {
-            AllKeywordsDialog dialog = new AllKeywordsDialog(mainApp, this);
-            dialog.setVisible(true);
-        });
 
         noKeywordsCheckBox.addItemListener(e -> {
             boolean isSelected = e.getStateChange() == ItemEvent.SELECTED;
             keywordField.setEnabled(!isSelected);
             expressionBuilderButton.setEnabled(!isSelected);
-            allKeywordsButton.setEnabled(!isSelected);
         });
 
         JButton searchButton = new JButton("Search");
@@ -88,6 +80,13 @@ public class SearchBar extends JToolBar {
             mainApp.displayImages(mainApp.getCurrentDirectory()); // Refresh view
         });
 
+        JButton allKeywordsButton = new JButton("All Keywords");
+        allKeywordsButton.setToolTipText("View, edit, and select from all available keywords");
+        allKeywordsButton.addActionListener(e -> {
+            AllKeywordsDialog dialog = new AllKeywordsDialog(mainApp, this);
+            dialog.setVisible(true);
+        });
+
         // --- Layout ---
         add(new JLabel("File Name:"));
         add(searchQueryField);
@@ -97,7 +96,6 @@ public class SearchBar extends JToolBar {
         add(noKeywordsCheckBox);
         add(keywordField);
         add(expressionBuilderButton);
-        add(allKeywordsButton);
         add(expressionLabel);
         addSeparator();
 
@@ -108,6 +106,8 @@ public class SearchBar extends JToolBar {
 
         add(searchButton);
         add(clearButton);
+        addSeparator();
+        add(allKeywordsButton);
     }
 
     private void performSearch() {
