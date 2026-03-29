@@ -8,6 +8,7 @@ import org.photoshelf.plugin.impl.PHashPlugin;
 import org.photoshelf.service.PhotoService;
 import org.photoshelf.service.PluginManager;
 import org.photoshelf.service.PluginStateListener;
+import org.photoshelf.ui.AllKeywordsDialog;
 import org.photoshelf.ui.ImagePanelManager;
 import org.photoshelf.ui.PluginManagementDialog;
 import org.photoshelf.ui.SelectionCallback;
@@ -53,6 +54,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
     private boolean isDuplicateViewMode = false;
     private final PhotoService photoService;
     private JMenu pluginsMenu;
+    public boolean isSearchRunning = false;
 
     public PhotoShelfUI() {
         setTitle("PhotoShelf");
@@ -176,11 +178,36 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
         toolsMenu.add(normalViewItem);
 
         toolsMenu.add(new JSeparator());
+        JMenuItem rescanCacheItem = new JMenuItem("Rescan Directory (Recursive) & Validate Cache");
+        rescanCacheItem.addActionListener(e -> startCacheValidation());
+        toolsMenu.add(rescanCacheItem);
+        
+        toolsMenu.add(new JSeparator());
         JMenuItem managePluginsItem = new JMenuItem("Manage Plugins");
         managePluginsItem.addActionListener(e -> new PluginManagementDialog(this).setVisible(true));
         toolsMenu.add(managePluginsItem);
 
         return menuBar;
+    }
+    
+    private void startCacheValidation() {
+        if (model.getCurrentDirectory() == null || !model.getCurrentDirectory().exists()) {
+            JOptionPane.showMessageDialog(this, "Please select a valid directory first.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int result = JOptionPane.showConfirmDialog(this, 
+            "This will recursively scan the current directory to build the image cache and remove entries for deleted files.\nThis may take some time depending on the number of images.\nDo you want to proceed?", 
+            "Confirm Rescan", 
+            JOptionPane.YES_NO_OPTION, 
+            JOptionPane.QUESTION_MESSAGE);
+
+        if (result == JOptionPane.YES_OPTION) {
+            prepareForNewTask();
+            CacheValidationWorker worker = new CacheValidationWorker(this, model.getCurrentDirectory(), pHashCacheManager);
+            currentWorker = worker;
+            worker.execute();
+        }
     }
 
     private void switchToNormalView() {
@@ -514,6 +541,7 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
     public void search(SearchParams params) {
         prepareForNewTask();
         setSearchStatus("Searching...");
+        isSearchRunning = true;
         String filter = toolbarManager.getFilterText().trim();
         Searcher searcher = new Searcher(this, getCurrentDirectory(), params, filter, toolbarManager.getSortCriteria(), toolbarManager.isSortDescending());
         currentWorker = searcher;
@@ -538,6 +566,9 @@ public class PhotoShelfUI extends JFrame implements SelectionCallback, PluginSta
     }
 
     public void addNewImage(File imgFile) {
+        if (isSearchRunning) {
+            return;
+        }
         try {
             JLabel label = createImageLabel(imgFile, imagePanelManager.getThumbnailSize());
             if (label != null) {

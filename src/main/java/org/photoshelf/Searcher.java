@@ -99,19 +99,26 @@ public class Searcher extends SwingWorker<Void, JLabel> {
 
         // Sort the collected files
         Comparator<File> comparator = switch (sortCriteria) {
-            case "Date Created" -> Comparator.comparing(file -> {
-                try {
-                    return Files.readAttributes(file.toPath(), BasicFileAttributes.class).creationTime();
-                } catch (IOException e) {
-                    return null;
-                }
-            }, Comparator.nullsLast(Comparator.naturalOrder()));
-            case "Size" -> Comparator.comparingLong(File::length);
-            case "Type" -> Comparator.comparing(file -> {
-                String name = file.getName();
-                int lastDot = name.lastIndexOf('.');
-                return (lastDot > 0 && lastDot < name.length() - 1) ? name.substring(lastDot + 1).toLowerCase() : "";
-            });
+            case "Date Created" -> {
+                Comparator<File> dateComparator = Comparator.comparing(file -> {
+                    try {
+                        return Files.readAttributes(file.toPath(), BasicFileAttributes.class).creationTime();
+                    } catch (IOException e) {
+                        System.err.println("Could not read creation time for " + file.getAbsolutePath() + ": " + e.getMessage());
+                        return null;
+                    }
+                }, Comparator.nullsLast(Comparator.naturalOrder()));
+                yield dateComparator.thenComparing(File::getPath);
+            }
+            case "Size" -> Comparator.comparingLong(File::length).thenComparing(File::getPath);
+            case "Type" -> {
+                Comparator<File> typeComparator = Comparator.comparing(file -> {
+                    String name = file.getName();
+                    int lastDot = name.lastIndexOf('.');
+                    return (lastDot > 0 && lastDot < name.length() - 1) ? name.substring(lastDot + 1).toLowerCase() : "";
+                });
+                yield typeComparator.thenComparing(File::getPath);
+            }
             default -> Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER);
         };
 
@@ -196,8 +203,12 @@ public class Searcher extends SwingWorker<Void, JLabel> {
 
     @Override
     protected void done() {
-        if (!isCancelled()) {
-            mainApp.setSearchStatus("Found " + filesFound.get() + " matching files");
+        try {
+            if (!isCancelled()) {
+                mainApp.setSearchStatus("Found " + filesFound.get() + " matching files");
+            }
+        } finally {
+            mainApp.isSearchRunning = false;
         }
     }
 }

@@ -126,4 +126,28 @@ public class PHashCacheManager {
         }
         return result;
     }
+
+    public int validateCache() {
+        Set<String> filePaths = getAllFilePaths();
+        int removedCount = 0;
+        String sql = "DELETE FROM image_hashes WHERE file_path = ?";
+        Connection conn = dbManager.getConnection();
+        if (conn == null) return 0;
+
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            for (String path : filePaths) {
+                if (!new File(path).exists()) {
+                    pstmt.setString(1, path);
+                    pstmt.addBatch();
+                    removedCount++;
+                }
+            }
+            if (removedCount > 0) {
+                pstmt.executeBatch();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return removedCount;
+    }
 }
